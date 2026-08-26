@@ -1,13 +1,23 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/player.gd" id="2_player"]
+[ext_resource type="Script" path="res://scripts/game_time.gd" id="3_time"]
 
 [sub_resource type="RectangleShape2D" id="PlayerShape"]
 size = Vector2(32, 40)
 
 [sub_resource type="RectangleShape2D" id="AdvisorShape"]
 size = Vector2(36, 44)
+
+[sub_resource type="RectangleShape2D" id="HorizontalWallShape"]
+size = Vector2(1152, 24)
+
+[sub_resource type="RectangleShape2D" id="VerticalWallShape"]
+size = Vector2(24, 592)
+
+[sub_resource type="RectangleShape2D" id="DeskCollisionShape"]
+size = Vector2(280, 80)
 
 [sub_resource type="StyleBoxFlat" id="DialogueStyle"]
 bg_color = Color(0.09, 0.075, 0.055, 0.96)
@@ -21,14 +31,11 @@ corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
 
-[sub_resource type="StyleBoxFlat" id="RoomStyle"]
-bg_color = Color(0.23, 0.18, 0.12, 1)
-
-[sub_resource type="StyleBoxFlat" id="DeskStyle"]
-bg_color = Color(0.34, 0.20, 0.10, 1)
-
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
+
+[node name="GameTime" type="Node" parent="."]
+script = ExtResource("3_time")
 
 [node name="Room" type="Polygon2D" parent="."]
 polygon = PackedVector2Array(64, 64, 1216, 64, 1216, 656, 64, 656)
@@ -45,6 +52,38 @@ color = Color(0.30, 0.17, 0.08, 1)
 [node name="DeskLabel" type="Label" parent="."]
 position = Vector2(589, 132)
 text = "KING'S DESK"
+
+[node name="Collision" type="Node2D" parent="."]
+
+[node name="TopWall" type="StaticBody2D" parent="Collision"]
+position = Vector2(640, 52)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Collision/TopWall"]
+shape = SubResource("HorizontalWallShape")
+
+[node name="BottomWall" type="StaticBody2D" parent="Collision"]
+position = Vector2(640, 668)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Collision/BottomWall"]
+shape = SubResource("HorizontalWallShape")
+
+[node name="LeftWall" type="StaticBody2D" parent="Collision"]
+position = Vector2(52, 360)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Collision/LeftWall"]
+shape = SubResource("VerticalWallShape")
+
+[node name="RightWall" type="StaticBody2D" parent="Collision"]
+position = Vector2(1228, 360)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Collision/RightWall"]
+shape = SubResource("VerticalWallShape")
+
+[node name="DeskBlocker" type="StaticBody2D" parent="Collision"]
+position = Vector2(640, 150)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Collision/DeskBlocker"]
+shape = SubResource("DeskCollisionShape")
 
 [node name="Player" type="CharacterBody2D" parent="."]
 position = Vector2(640, 380)
@@ -88,9 +127,26 @@ text = "Forging Legacy — First Prototype"
 [node name="Instructions" type="Label" parent="UI"]
 offset_left = 24.0
 offset_top = 54.0
-offset_right = 500.0
+offset_right = 780.0
 offset_bottom = 86.0
-text = "WASD / Arrow Keys: Move   •   E: Speak   •   Esc: Close"
+text = "WASD / Arrows: Move • E: Speak • Esc: Close • 1–4: Time speed"
+
+[node name="DateLabel" type="Label" parent="UI"]
+offset_left = 900.0
+offset_top = 20.0
+offset_right = 1255.0
+offset_bottom = 48.0
+theme_override_font_sizes/font_size = 17
+text = "Year 1 • Month 1 • Day 1 • 08:00"
+horizontal_alignment = 2
+
+[node name="SpeedLabel" type="Label" parent="UI"]
+offset_left = 765.0
+offset_top = 52.0
+offset_right = 1255.0
+offset_bottom = 80.0
+text = "Time: 1x   [1 Pause • 2 1x • 3 10x • 4 100x]"
+horizontal_alignment = 2
 
 [node name="InteractionPrompt" type="Label" parent="UI"]
 offset_left = 520.0
