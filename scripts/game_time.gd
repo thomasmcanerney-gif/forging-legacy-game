@@ -8,13 +8,13 @@ const MINUTES_PER_DAY := 24 * 60
 const DAYS_PER_MONTH := 30
 const MONTHS_PER_YEAR := 12
 
-var year := 1
-var month := 1
-var day := 1
-var hour := 8
-var minute := 0
-var speed_multiplier := 1.0
-var accumulated_minutes := 0.0
+var year: int = 1
+var month: int = 1
+var day: int = 1
+var hour: int = 8
+var minute: int = 0
+var speed_multiplier: float = 1.0
+var accumulated_minutes: float = 0.0
 
 func _ready() -> void:
 	_emit_time()
@@ -31,7 +31,7 @@ func _process(delta: float) -> void:
 	if whole_minutes <= 0:
 		return
 
-	accumulated_minutes -= whole_minutes
+	accumulated_minutes -= float(whole_minutes)
 	_advance_minutes(whole_minutes)
 
 func set_speed(multiplier: float) -> void:
@@ -48,10 +48,10 @@ func get_display_text() -> String:
 
 func _advance_minutes(amount: int) -> void:
 	var total_minutes := hour * 60 + minute + amount
-	var days_to_add := total_minutes / MINUTES_PER_DAY
+	var days_to_add := int(total_minutes / MINUTES_PER_DAY)
 	var minute_of_day := total_minutes % MINUTES_PER_DAY
 
-	hour = minute_of_day / 60
+	hour = int(minute_of_day / 60)
 	minute = minute_of_day % 60
 	day += days_to_add
 
