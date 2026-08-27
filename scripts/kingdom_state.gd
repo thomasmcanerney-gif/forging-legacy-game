@@ -2,6 +2,7 @@ class_name KingdomState
 extends Node
 
 const CAPITAL_ID := "capital"
+const CAPITAL_POSITION := Vector2(255, 235)
 
 var regions: Dictionary = {}
 var region_order: Array[String] = []
@@ -16,7 +17,7 @@ func _build_prototype_regions() -> void:
 	_add_region(RegionData.new(
 		"northern_march",
 		"Northern March",
-		Vector2(805, 175),
+		Vector2(805, 105),
 		"Rugged frontier",
 		"Rough track",
 		1440.0,
@@ -25,7 +26,7 @@ func _build_prototype_regions() -> void:
 	_add_region(RegionData.new(
 		"riverlands",
 		"Riverlands",
-		Vector2(865, 385),
+		Vector2(835, 285),
 		"Fertile river valley",
 		"Basic road",
 		900.0,
@@ -34,7 +35,7 @@ func _build_prototype_regions() -> void:
 	_add_region(RegionData.new(
 		"western_hills",
 		"Western Hills",
-		Vector2(520, 155),
+		Vector2(420, 115),
 		"Rocky hill country",
 		"Poor road",
 		1860.0,
