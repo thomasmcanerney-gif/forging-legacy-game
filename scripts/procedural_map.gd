@@ -27,9 +27,9 @@ func _draw() -> void:
 		draw_colored_polygon(tri, Color(0.31, 0.29, 0.25))
 
 	# Mark the usable mountain pass before roads so the route visibly threads it.
-	var pass := kingdom_state.mountain_pass_position
-	draw_circle(pass, 8.0, Color(0.70, 0.61, 0.39))
-	draw_string(ThemeDB.fallback_font, pass + Vector2(-28, -12), "Pass", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.16, 0.13, 0.08))
+	var pass_position: Vector2 = kingdom_state.mountain_pass_position
+	draw_circle(pass_position, 8.0, Color(0.70, 0.61, 0.39))
+	draw_string(ThemeDB.fallback_font, pass_position + Vector2(-28, -12), "Pass", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.16, 0.13, 0.08))
 
 	if kingdom_state.river_points.size() > 1:
 		draw_polyline(kingdom_state.river_points, Color(0.18, 0.42, 0.60), 14.0, true)
