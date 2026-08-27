@@ -46,7 +46,7 @@ func generate_geography(seed: int) -> void:
 		mountain_positions.append(Vector2(x, y))
 	mountain_pass_position = mountain_positions[5] + Vector2(0.0, 24.0)
 
-	for i in range(7):
+	for _i in range(7):
 		field_positions.append(Vector2(rng.randf_range(105.0, 850.0), rng.randf_range(185.0, 312.0)))
 
 	var lower_river_x: float = _river_x_at_y(240.0)
@@ -67,7 +67,7 @@ func generate_geography(seed: int) -> void:
 	_build_territories()
 
 func _add_generated_region(region_id: String, name: String, position: Vector2, terrain: String, road: String, terrain_mod: float, road_mod: float, response_minutes: float) -> void:
-	var crosses_river := _route_crosses_river(capital_position, position)
+	var crosses_river: bool = _route_crosses_river(capital_position, position)
 	_add_region(RegionData.new(region_id, name, position, terrain, road, 180.0, response_minutes, crosses_river, terrain_mod, road_mod))
 
 func _build_routes() -> void:
@@ -79,16 +79,16 @@ func _build_routes() -> void:
 		if region.id == "western_hills":
 			points.append(mountain_pass_position)
 		elif region.river_crossing:
-			var crossing := _find_crossing_for_route(capital_position, region.map_position)
+			var crossing: Vector2 = _find_crossing_for_route(capital_position, region.map_position)
 			crossing_points[region.id] = crossing
 			points.append(crossing + Vector2(-18.0, 0.0))
 			points.append(crossing + Vector2(18.0, 0.0))
 		points.append(region.map_position)
 		route_points[region.id] = points
-		region.travel_minutes_from_capital = _calculate_route_minutes(points, region.terrain_modifier, region.road_modifier, region.river_crossing)
+		region.travel_minutes_from_capital = _calculate_route_minutes(points, region.terrain_multiplier, region.road_multiplier, region.river_crossing)
 
 func _calculate_route_minutes(points: PackedVector2Array, terrain_mod: float, road_mod: float, crosses_river: bool) -> float:
-	var route_distance := 0.0
+	var route_distance: float = 0.0
 	for i in range(points.size() - 1):
 		route_distance += points[i].distance_to(points[i + 1])
 	var total: float = route_distance * 1.55 * terrain_mod * road_mod
@@ -101,10 +101,6 @@ func _find_crossing_for_route(origin: Vector2, destination: Vector2) -> Vector2:
 	return Vector2(_river_x_at_y(desired_y), desired_y)
 
 func _build_territories() -> void:
-	var capital := capital_position
-	var west := get_region("western_hills").map_position
-	var river := get_region("riverlands").map_position
-	var north := get_region("northern_march").map_position
 	territory_polygons["capital"] = PackedVector2Array([
 		Vector2(55, 175), Vector2(330, 155), Vector2(430, 225), Vector2(400, 340), Vector2(55, 340)
 	])
@@ -124,8 +120,9 @@ func _route_crosses_river(origin: Vector2, destination: Vector2) -> bool:
 	return origin_side * destination_side < 0.0
 
 func _river_x_at_y(target_y: float) -> float:
-	if river_points.is_empty(): return MAP_SIZE.x * 0.55
-	var closest := river_points[0]
+	if river_points.is_empty():
+		return MAP_SIZE.x * 0.55
+	var closest: Vector2 = river_points[0]
 	var best_distance: float = absf(closest.y - target_y)
 	for point in river_points:
 		var distance: float = absf(point.y - target_y)
@@ -145,4 +142,7 @@ func get_region_ids() -> Array[String]:
 	return region_order.duplicate()
 
 func get_route(region_id: String) -> PackedVector2Array:
-	return route_points.get(region_id, PackedVector2Array()) as PackedVector2Array
+	var value: Variant = route_points.get(region_id)
+	if value is PackedVector2Array:
+		return value
+	return PackedVector2Array()
