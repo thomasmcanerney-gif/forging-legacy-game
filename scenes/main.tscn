@@ -1,9 +1,10 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/player.gd" id="2_player"]
 [ext_resource type="Script" path="res://scripts/game_time.gd" id="3_time"]
 [ext_resource type="Script" path="res://scripts/messenger_system.gd" id="4_messenger"]
+[ext_resource type="Script" path="res://scripts/kingdom_state.gd" id="5_kingdom"]
 
 [sub_resource type="RectangleShape2D" id="PlayerShape"]
 size = Vector2(32, 40)
@@ -52,6 +53,9 @@ script = ExtResource("3_time")
 
 [node name="MessengerSystem" type="Node" parent="."]
 script = ExtResource("4_messenger")
+
+[node name="KingdomState" type="Node" parent="."]
+script = ExtResource("5_kingdom")
 
 [node name="Room" type="Polygon2D" parent="."]
 polygon = PackedVector2Array(64, 64, 1216, 64, 1216, 656, 64, 656)
@@ -135,17 +139,17 @@ shape = SubResource("AdvisorShape")
 [node name="Title" type="Label" parent="UI"]
 offset_left = 24.0
 offset_top = 20.0
-offset_right = 450.0
+offset_right = 500.0
 offset_bottom = 52.0
 theme_override_font_sizes/font_size = 22
-text = "Forging Legacy — Messenger Prototype"
+text = "Forging Legacy — Region Data Prototype"
 
 [node name="Instructions" type="Label" parent="UI"]
 offset_left = 24.0
 offset_top = 54.0
-offset_right = 850.0
+offset_right = 900.0
 offset_bottom = 86.0
-text = "WASD / Arrows: Move • E: Speak • M: Map • O: Send Order • 1–4: Time"
+text = "WASD: Move • E: Speak • M: Map • T: Select Region • O: Send Order • 1–4: Time"
 
 [node name="DateLabel" type="Label" parent="UI"]
 offset_left = 900.0
@@ -200,14 +204,20 @@ offset_bottom = 650.0
 theme_override_styles/panel = SubResource("MapStyle")
 
 [node name="MapTitle" type="Label" parent="UI/MapPanel"]
-position = Vector2(30, 22)
+position = Vector2(30, 18)
 theme_override_colors/font_color = Color(0.95, 0.87, 0.68, 1)
 theme_override_font_sizes/font_size = 24
 text = "KINGDOM MAP"
 
 [node name="MapHelp" type="Label" parent="UI/MapPanel"]
-position = Vector2(650, 28)
-text = "O: Send order   •   Esc/M: Close"
+position = Vector2(600, 25)
+text = "T: Select region • O: Send order • Esc/M: Close"
+
+[node name="SelectedRegion" type="Label" parent="UI/MapPanel"]
+position = Vector2(30, 55)
+size = Vector2(950, 30)
+theme_override_colors/font_color = Color(0.88, 0.78, 0.55, 1)
+text = "Selected region"
 
 [node name="Land" type="Polygon2D" parent="UI/MapPanel"]
 polygon = PackedVector2Array(70, 90, 945, 90, 945, 430, 70, 430)
@@ -218,10 +228,20 @@ points = PackedVector2Array(560, 92, 540, 145, 570, 215, 525, 290, 550, 360, 510
 width = 16.0
 default_color = Color(0.18, 0.42, 0.60, 1)
 
-[node name="Road" type="Line2D" parent="UI/MapPanel"]
+[node name="NorthernRoad" type="Line2D" parent="UI/MapPanel"]
 points = PackedVector2Array(255, 285, 390, 250, 540, 225, 675, 205, 805, 175)
-width = 6.0
+width = 5.0
 default_color = Color(0.32, 0.23, 0.13, 1)
+
+[node name="RiverRoad" type="Line2D" parent="UI/MapPanel"]
+points = PackedVector2Array(255, 285, 430, 315, 620, 350, 865, 385)
+width = 6.0
+default_color = Color(0.36, 0.26, 0.15, 1)
+
+[node name="WesternRoad" type="Line2D" parent="UI/MapPanel"]
+points = PackedVector2Array(255, 285, 335, 235, 410, 190, 520, 155)
+width = 3.0
+default_color = Color(0.27, 0.20, 0.13, 1)
 
 [node name="Capital" type="Polygon2D" parent="UI/MapPanel"]
 position = Vector2(255, 285)
@@ -241,6 +261,24 @@ color = Color(0.35, 0.52, 0.31, 1)
 position = Vector2(745, 205)
 text = "Northern March"
 
+[node name="Riverlands" type="Polygon2D" parent="UI/MapPanel"]
+position = Vector2(865, 385)
+polygon = PackedVector2Array(-22, -22, 22, -22, 22, 22, -22, 22)
+color = Color(0.31, 0.50, 0.47, 1)
+
+[node name="RiverlandsLabel" type="Label" parent="UI/MapPanel"]
+position = Vector2(820, 412)
+text = "Riverlands"
+
+[node name="WesternHills" type="Polygon2D" parent="UI/MapPanel"]
+position = Vector2(520, 155)
+polygon = PackedVector2Array(-22, 0, -10, -24, 0, -8, 12, -28, 24, 0)
+color = Color(0.52, 0.40, 0.30, 1)
+
+[node name="WesternLabel" type="Label" parent="UI/MapPanel"]
+position = Vector2(465, 185)
+text = "Western Hills"
+
 [node name="Messenger" type="Polygon2D" parent="UI/MapPanel"]
 position = Vector2(255, 285)
 polygon = PackedVector2Array(0, -10, 8, 8, 0, 4, -8, 8)
@@ -251,5 +289,5 @@ position = Vector2(80, 455)
 size = Vector2(875, 60)
 theme_override_colors/font_color = Color(0.95, 0.87, 0.68, 1)
 theme_override_font_sizes/font_size = 17
-text = "The Northern March reports repeated livestock raids. Press O to send an order to the governor."
+text = "Choose a region and send an order."
 autowrap_mode = 2
