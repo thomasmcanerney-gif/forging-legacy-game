@@ -44,9 +44,8 @@ func _process(delta: float) -> void:
 	if close_enough and Input.is_action_just_pressed("interact") and not map_open:
 		_set_dialogue_open(not dialogue_open)
 		if dialogue_open:
-			dialogue_text.text = "My king, geography now shapes how quickly your commands can reach the realm. Rivers delay crossings, hills slow travel, and better roads matter.\n\nOpen the map with M and compare the three regions."
-	if dialogue_open and Input.is_action_just_pressed("ui_cancel"):
-		_set_dialogue_open(false)
+			dialogue_text.text = "My king, roads now follow the land. Rivers require a ford and the western road threads a mountain pass.\n\nOpen the map with M and watch where your messenger actually travels."
+	if dialogue_open and Input.is_action_just_pressed("ui_cancel"): _set_dialogue_open(false)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -63,8 +62,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_ESCAPE:
 				if map_open: _set_map_open(false)
 
-func _toggle_map() -> void:
-	_set_map_open(not map_open)
+func _toggle_map() -> void: _set_map_open(not map_open)
 
 func _set_map_open(open: bool) -> void:
 	map_open = open
@@ -101,17 +99,14 @@ func _update_selected_region_display() -> void:
 		selected_region_label.text = "No region selected"
 		return
 	selected_region_label.text = "Selected: %s" % region.get_summary()
-	map_status.text = "Selected %s. Travel time now comes from distance, terrain, roads, and river crossings. Seed: %d" % [region.display_name, kingdom_state.map_seed]
+	map_status.text = "Selected %s. Roads now use crossings and passes. Seed: %d" % [region.display_name, kingdom_state.map_seed]
 
 func _send_regional_order() -> void:
 	if messenger_system.active:
 		map_status.text = "A royal messenger is already carrying a matter."
 		return
 	var region := _get_selected_region()
-	if region == null:
-		map_status.text = "No region is available for orders."
-		return
-	messenger_system.start_journey(region)
+	if region != null: messenger_system.start_journey(region)
 
 func _set_dialogue_open(open: bool) -> void:
 	dialogue_open = open
@@ -119,11 +114,8 @@ func _set_dialogue_open(open: bool) -> void:
 	player.set_movement_enabled(not open and not map_open)
 	prompt.visible = false
 
-func _on_time_changed(display_text: String) -> void:
-	date_label.text = display_text
-
-func _on_speed_changed(speed_name: String) -> void:
-	speed_label.text = "Time: %s   [1 Pause • 2 1x • 3 10x • 4 100x]" % speed_name
+func _on_time_changed(display_text: String) -> void: date_label.text = display_text
+func _on_speed_changed(speed_name: String) -> void: speed_label.text = "Time: %s   [1 Pause • 2 1x • 3 10x • 4 100x]" % speed_name
 
 func _on_journey_started(target_id: String) -> void:
 	messenger_marker.visible = true
@@ -132,14 +124,26 @@ func _on_journey_started(target_id: String) -> void:
 	if region != null: selected_region_label.text = "Active route: %s" % region.get_summary()
 
 func _on_journey_progress(progress: float, returning: bool, target_id: String) -> void:
-	var region := kingdom_state.get_region(target_id)
-	if region == null: return
-	if returning: messenger_marker.position = region.map_position.lerp(kingdom_state.capital_position, progress)
-	else: messenger_marker.position = kingdom_state.capital_position.lerp(region.map_position, progress)
+	var route := kingdom_state.get_route(target_id)
+	if route.size() < 2: return
+	var route_progress := 1.0 - progress if returning else progress
+	messenger_marker.position = _position_along_route(route, route_progress)
 
-func _on_messenger_phase_changed(text: String) -> void:
-	map_status.text = text
+func _position_along_route(route: PackedVector2Array, progress: float) -> Vector2:
+	progress = clampf(progress, 0.0, 1.0)
+	var total_length := 0.0
+	for i in range(route.size() - 1): total_length += route[i].distance_to(route[i + 1])
+	var target_distance := total_length * progress
+	var traveled := 0.0
+	for i in range(route.size() - 1):
+		var segment_length := route[i].distance_to(route[i + 1])
+		if traveled + segment_length >= target_distance:
+			var segment_progress := (target_distance - traveled) / maxf(segment_length, 0.001)
+			return route[i].lerp(route[i + 1], segment_progress)
+		traveled += segment_length
+	return route[route.size() - 1]
 
+func _on_messenger_phase_changed(text: String) -> void: map_status.text = text
 func _on_journey_completed(_target_id: String) -> void:
 	messenger_marker.position = kingdom_state.capital_position
 	messenger_marker.visible = false
