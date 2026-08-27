@@ -16,8 +16,6 @@ extends Node2D
 @onready var procedural_map: ProceduralMap = $UI/MapPanel/ProceduralMap
 @onready var messenger_marker: Polygon2D = $UI/MapPanel/ProceduralMap/Messenger
 
-const CAPITAL_POS := Vector2(255, 235)
-
 var dialogue_open := false
 var map_open := false
 var selected_region_index := 0
@@ -29,14 +27,12 @@ func _ready() -> void:
 	messenger_marker.visible = false
 	procedural_map.setup(kingdom_state)
 	procedural_map.region_clicked.connect(_select_region_by_id)
-
 	game_time.time_changed.connect(_on_time_changed)
 	game_time.speed_changed.connect(_on_speed_changed)
 	messenger_system.journey_started.connect(_on_journey_started)
 	messenger_system.journey_progress.connect(_on_journey_progress)
 	messenger_system.phase_changed.connect(_on_messenger_phase_changed)
 	messenger_system.journey_completed.connect(_on_journey_completed)
-
 	_on_time_changed(game_time.get_display_text())
 	_on_speed_changed(game_time.get_speed_name())
 	_update_selected_region_display()
@@ -48,7 +44,7 @@ func _process(delta: float) -> void:
 	if close_enough and Input.is_action_just_pressed("interact") and not map_open:
 		_set_dialogue_open(not dialogue_open)
 		if dialogue_open:
-			dialogue_text.text = "My king, the realm is young. Roads are few, the land is still being learned, and each region has its own character.\n\nOpen the map with M. Click a regional center, then press O to send an order."
+			dialogue_text.text = "My king, geography now shapes how quickly your commands can reach the realm. Rivers delay crossings, hills slow travel, and better roads matter.\n\nOpen the map with M and compare the three regions."
 	if dialogue_open and Input.is_action_just_pressed("ui_cancel"):
 		_set_dialogue_open(false)
 
@@ -105,7 +101,7 @@ func _update_selected_region_display() -> void:
 		selected_region_label.text = "No region selected"
 		return
 	selected_region_label.text = "Selected: %s" % region.get_summary()
-	map_status.text = "Selected %s. Press O to send an order. Seed: %d" % [region.display_name, procedural_map.map_seed]
+	map_status.text = "Selected %s. Travel time now comes from distance, terrain, roads, and river crossings. Seed: %d" % [region.display_name, kingdom_state.map_seed]
 
 func _send_regional_order() -> void:
 	if messenger_system.active:
@@ -131,20 +127,20 @@ func _on_speed_changed(speed_name: String) -> void:
 
 func _on_journey_started(target_id: String) -> void:
 	messenger_marker.visible = true
-	messenger_marker.position = CAPITAL_POS
+	messenger_marker.position = kingdom_state.capital_position
 	var region := kingdom_state.get_region(target_id)
 	if region != null: selected_region_label.text = "Active route: %s" % region.get_summary()
 
 func _on_journey_progress(progress: float, returning: bool, target_id: String) -> void:
 	var region := kingdom_state.get_region(target_id)
 	if region == null: return
-	if returning: messenger_marker.position = region.map_position.lerp(CAPITAL_POS, progress)
-	else: messenger_marker.position = CAPITAL_POS.lerp(region.map_position, progress)
+	if returning: messenger_marker.position = region.map_position.lerp(kingdom_state.capital_position, progress)
+	else: messenger_marker.position = kingdom_state.capital_position.lerp(region.map_position, progress)
 
 func _on_messenger_phase_changed(text: String) -> void:
 	map_status.text = text
 
 func _on_journey_completed(_target_id: String) -> void:
-	messenger_marker.position = CAPITAL_POS
+	messenger_marker.position = kingdom_state.capital_position
 	messenger_marker.visible = false
 	_update_selected_region_display()
