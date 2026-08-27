@@ -14,6 +14,9 @@ extends Node2D
 @onready var map_status: Label = $UI/MapPanel/MapStatus
 @onready var selected_region_label: Label = $UI/MapPanel/SelectedRegion
 @onready var messenger_marker: Polygon2D = $UI/MapPanel/Messenger
+@onready var northern_button: Button = $UI/MapPanel/NorthernSelect
+@onready var riverlands_button: Button = $UI/MapPanel/RiverlandsSelect
+@onready var western_button: Button = $UI/MapPanel/WesternSelect
 
 const CAPITAL_POS := Vector2(255, 285)
 
@@ -33,6 +36,9 @@ func _ready() -> void:
 	messenger_system.journey_progress.connect(_on_journey_progress)
 	messenger_system.phase_changed.connect(_on_messenger_phase_changed)
 	messenger_system.journey_completed.connect(_on_journey_completed)
+	northern_button.pressed.connect(func(): _select_region_by_id("northern_march"))
+	riverlands_button.pressed.connect(func(): _select_region_by_id("riverlands"))
+	western_button.pressed.connect(func(): _select_region_by_id("western_hills"))
 
 	_on_time_changed(game_time.get_display_text())
 	_on_speed_changed(game_time.get_speed_name())
@@ -47,7 +53,7 @@ func _process(delta: float) -> void:
 	if close_enough and Input.is_action_just_pressed("interact") and not map_open:
 		_set_dialogue_open(not dialogue_open)
 		if dialogue_open:
-			dialogue_text.text = "My king, three regions are now reporting through the capital.\n\nOpen the map with M. Use T to choose a region, then O to send its governor an order."
+			dialogue_text.text = "My king, three regions are now reporting through the capital.\n\nOpen the map with M. Click a region to select it, then press O to send its governor an order."
 
 	if dialogue_open and Input.is_action_just_pressed("ui_cancel"):
 		_set_dialogue_open(false)
@@ -95,6 +101,18 @@ func _cycle_selected_region() -> void:
 	selected_region_index = (selected_region_index + 1) % ids.size()
 	_update_selected_region_display()
 
+func _select_region_by_id(region_id: String) -> void:
+	if messenger_system.active:
+		map_status.text = "A royal messenger is already carrying a matter. Wait for the response before choosing another region."
+		return
+
+	var ids := kingdom_state.get_region_ids()
+	var index := ids.find(region_id)
+	if index == -1:
+		return
+	selected_region_index = index
+	_update_selected_region_display()
+
 func _get_selected_region() -> RegionData:
 	var ids := kingdom_state.get_region_ids()
 	if ids.is_empty():
@@ -107,7 +125,13 @@ func _update_selected_region_display() -> void:
 		selected_region_label.text = "No region selected"
 		return
 	selected_region_label.text = "Selected: %s" % region.get_summary()
-	map_status.text = "Press T to select another region or O to send an order to %s." % region.display_name
+	map_status.text = "Selected %s. Press O to send an order, or click another region." % region.display_name
+	_update_region_button_states(region.id)
+
+func _update_region_button_states(selected_id: String) -> void:
+	northern_button.text = "Northern March" + (" ✓" if selected_id == "northern_march" else "")
+	riverlands_button.text = "Riverlands" + (" ✓" if selected_id == "riverlands" else "")
+	western_button.text = "Western Hills" + (" ✓" if selected_id == "western_hills" else "")
 
 func _send_regional_order() -> void:
 	if messenger_system.active:
