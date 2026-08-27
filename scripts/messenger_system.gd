@@ -33,7 +33,7 @@ func advance(delta: float, game_speed: float) -> void:
 	if not active or game_speed <= 0.0:
 		return
 
-	var game_minutes := delta * game_speed
+	var game_minutes: float = delta * game_speed
 
 	if waiting_for_response:
 		response_delay_remaining -= game_minutes
@@ -46,7 +46,7 @@ func advance(delta: float, game_speed: float) -> void:
 		return
 
 	progress_minutes += game_minutes
-	var progress := clamp(progress_minutes / one_way_travel_minutes, 0.0, 1.0)
+	var progress: float = clampf(progress_minutes / one_way_travel_minutes, 0.0, 1.0)
 	journey_progress.emit(progress, returning)
 
 	if progress < 1.0:
