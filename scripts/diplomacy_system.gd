@@ -31,7 +31,7 @@ func start_mission(target: WorldKingdomData, proposal: String, player_position: 
 	phase_changed.emit("Your envoy has departed for %s with a proposal of %s." % [target.display_name, _proposal_label(proposal_type)])
 	return true
 
-func advance(delta: float, speed_multiplier: float, target: WorldKingdomData) -> void:
+func advance(delta: float, speed_multiplier: float, target: WorldKingdomData, ruler: CharacterData) -> void:
 	if not active or speed_multiplier <= 0.0 or target == null:
 		return
 	var game_minutes: float = delta * speed_multiplier
@@ -43,7 +43,7 @@ func advance(delta: float, speed_multiplier: float, target: WorldKingdomData) ->
 		if elapsed_minutes >= outbound_minutes:
 			phase = "court"
 			elapsed_minutes = 0.0
-			pending_outcome = _decide_outcome(target)
+			pending_outcome = _decide_outcome(target, ruler)
 			phase_changed.emit("Your envoy has reached %s. %s is considering the proposal." % [target.capital_name, target.ruler_title + " " + target.ruler_name])
 	elif phase == "court":
 		if elapsed_minutes >= court_delay_minutes:
@@ -60,18 +60,18 @@ func advance(delta: float, speed_multiplier: float, target: WorldKingdomData) ->
 			_reset()
 			mission_completed.emit(completed_target, completed_proposal, completed_outcome)
 
-func _decide_outcome(target: WorldKingdomData) -> String:
+func _decide_outcome(target: WorldKingdomData, ruler: CharacterData) -> String:
+	var personal_modifier: int = 0
+	if ruler != null:
+		personal_modifier = ruler.get_diplomatic_modifier(proposal_type)
+	var decision_score: int = target.relation_to_player + personal_modifier
 	if proposal_type == "trade":
-		if target.relation_to_player >= 20:
-			return "accepted"
-		if target.relation_to_player >= -30:
-			return "countered"
+		if decision_score >= 20: return "accepted"
+		if decision_score >= -30: return "countered"
 		return "refused"
 	if proposal_type == "alliance":
-		if target.relation_to_player >= 50:
-			return "accepted"
-		if target.relation_to_player >= 20:
-			return "countered"
+		if decision_score >= 50: return "accepted"
+		if decision_score >= 20: return "countered"
 		return "refused"
 	return "refused"
 
