@@ -59,13 +59,16 @@ func _process(delta: float) -> void:
 	foreign_event_system.advance(delta, game_time.speed_multiplier)
 	if diplomacy_system.active:
 		var diplomatic_target: WorldKingdomData = kingdom_state.get_world_kingdom(diplomacy_system.target_id)
-		diplomacy_system.advance(delta, game_time.speed_multiplier, diplomatic_target)
+		var diplomatic_ruler: CharacterData = kingdom_state.get_ruler_for_kingdom(diplomacy_system.target_id)
+		diplomacy_system.advance(delta, game_time.speed_multiplier, diplomatic_target, diplomatic_ruler)
 	var close_enough: bool = player.global_position.distance_to(advisor.global_position) < 90.0
 	prompt.visible = close_enough and not dialogue_open and not map_open
 	if close_enough and Input.is_action_just_pressed("interact") and not map_open:
 		_set_dialogue_open(not dialogue_open)
 		if dialogue_open:
-			dialogue_text.text = "My king, the world will not wait for us to make the first move. Events beyond our borders may reach us only after the fact."
+			var steward: CharacterData = kingdom_state.get_character("steward")
+			if steward != null:
+				dialogue_text.text = "%s\n\n%s" % [steward.get_summary(), steward.get_memory_summary()]
 	if dialogue_open and Input.is_action_just_pressed("ui_cancel"):
 		_set_dialogue_open(false)
 
@@ -174,7 +177,11 @@ func _update_selected_kingdom_display() -> void:
 		selected_region_label.text = "No kingdom selected"
 		map_status.text = "Click a capital to inspect a neighboring kingdom."
 		return
-	selected_region_label.text = "Selected: %s" % world_kingdom.get_summary()
+	var ruler: CharacterData = kingdom_state.get_ruler_for_kingdom(world_kingdom.id)
+	if ruler != null:
+		selected_region_label.text = "Selected: %s\n%s" % [world_kingdom.get_summary(), ruler.get_summary()]
+	else:
+		selected_region_label.text = "Selected: %s" % world_kingdom.get_summary()
 	if foreign_event_system.is_waiting_for_decision() and world_kingdom.id == "edrath":
 		map_status.text = "COUP IN EDRATH: choose R to support Malek, C to recognize the rebels if they prevail, or N to remain neutral."
 	elif diplomacy_system.active:
@@ -182,7 +189,8 @@ func _update_selected_kingdom_display() -> void:
 	elif world_kingdom.id == "player":
 		map_status.text = world_kingdom.disposition
 	else:
-		map_status.text = "%s  T: propose trade • A: propose alliance" % world_kingdom.disposition
+		var memory_text: String = ruler.get_memory_summary() if ruler != null else "Memories: unavailable."
+		map_status.text = "%s\n%s\nT: propose trade • A: propose alliance" % [world_kingdom.disposition, memory_text]
 
 func _send_regional_order() -> void:
 	if messenger_system.active:
@@ -314,6 +322,10 @@ func _on_diplomacy_completed(target_id: String, proposal: String, outcome: Strin
 		else:
 			target.change_relation(-5)
 			result_text = "%s refused the alliance." % target.ruler_name
+	var responding_ruler: CharacterData = kingdom_state.get_ruler_for_kingdom(target_id)
+	if responding_ruler != null:
+		var memory_weight: int = 4 if outcome == "accepted" else (1 if outcome == "countered" else -3)
+		responding_ruler.remember("diplomacy_%s_%s" % [proposal, outcome], "Your %s proposal was %s" % [proposal, outcome], memory_weight)
 	selected_kingdom_id = target_id
 	if world_view:
 		messenger_marker.visible = false
@@ -340,15 +352,20 @@ func _on_foreign_event_resolved(text: String) -> void:
 	var edrath: WorldKingdomData = kingdom_state.get_world_kingdom("edrath")
 	if edrath == null: return
 	if foreign_event_system.decision == "support":
+		var malek: CharacterData = kingdom_state.get_character("malek")
+		if malek != null: malek.remember("coup_support", "You defended his throne during the coup", 30)
 		edrath.change_relation(20)
 		edrath.disposition = "King Malek survived the coup and remembers your support."
 	else:
 		edrath.ruler_name = "Varos"
 		edrath.alliance = false
+		var varos: CharacterData = kingdom_state.get_character("varos")
 		if foreign_event_system.decision == "recognize":
+			if varos != null: varos.remember("coup_recognition", "You recognized his claim before victory was certain", 24)
 			edrath.change_relation(15)
 			edrath.disposition = "King Varos seized the throne and values your early recognition."
 		else:
+			if varos != null: varos.remember("coup_neutrality", "You withheld support while he fought for the throne", -8)
 			edrath.change_relation(-5)
 			edrath.disposition = "King Varos seized the throne. Your neutrality avoided war but earned little trust."
 	selected_kingdom_id = "edrath"
