@@ -255,10 +255,10 @@ polygon = PackedVector2Array(0, -10, 8, 8, 0, 4, -8, 8)
 [node name="MapStatus" type="Label" parent="UI/MapPanel" unique_id=295972878]
 layout_mode = 0
 offset_left = 55.0
-offset_top = 455.0
+offset_top = 425.0
 offset_right = 985.0
-offset_bottom = 520.0
+offset_bottom = 540.0
 theme_override_colors/font_color = Color(0.95, 0.87, 0.68, 1)
-theme_override_font_sizes/font_size = 17
+theme_override_font_sizes/font_size = 15
 text = "Choose a region and send an order."
 autowrap_mode = 2
