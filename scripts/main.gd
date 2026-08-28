@@ -127,6 +127,7 @@ func _set_map_open(open: bool) -> void:
 		_update_marker_visibility()
 
 func _toggle_world_view() -> void:
+	if foreign_event_system.is_waiting_for_decision() or regional_decision_system.is_waiting_for_decision(): return
 	world_view = not world_view
 	procedural_map.set_world_view(world_view)
 	_update_map_mode_text()
@@ -250,6 +251,9 @@ func _choose_coup_response(choice: String) -> void:
 	map_help.text = "Decision sent • Time must pass before the outcome is known"
 
 func _choose_regional_response(choice: String) -> void:
+	if messenger_system.active:
+		map_status.text = "Another royal messenger is still abroad. The March must wait for his return."
+		return
 	if not regional_decision_system.choose_response(choice): return
 	var northern_march: RegionData = kingdom_state.get_region("northern_march")
 	if northern_march == null: return
