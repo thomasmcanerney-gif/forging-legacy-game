@@ -59,7 +59,7 @@ func get_memory_influence() -> int:
 	return clampi(total, -40, 40)
 
 func get_diplomatic_modifier(proposal: String) -> int:
-	var modifier: int = opinion_of_player / 4
+	var modifier: int = int(float(opinion_of_player) / 4.0)
 	if proposal == "trade":
 		if traits.has("Pragmatic"): modifier += 12
 		if desires.has("Prosperous trade"): modifier += 10
