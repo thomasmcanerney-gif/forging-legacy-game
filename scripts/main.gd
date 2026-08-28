@@ -19,6 +19,7 @@ extends Node2D
 @onready var messenger_marker: Polygon2D = $UI/MapPanel/ProceduralMap/Messenger
 
 var diplomacy_system: DiplomacySystem = DiplomacySystem.new()
+var foreign_event_system: ForeignEventSystem = ForeignEventSystem.new()
 var dialogue_open: bool = false
 var map_open: bool = false
 var world_view: bool = false
@@ -27,6 +28,7 @@ var selected_kingdom_id: String = "player"
 
 func _ready() -> void:
 	add_child(diplomacy_system)
+	add_child(foreign_event_system)
 	dialogue_panel.visible = false
 	prompt.visible = false
 	map_panel.visible = false
@@ -44,6 +46,9 @@ func _ready() -> void:
 	diplomacy_system.mission_progress.connect(_on_diplomacy_progress)
 	diplomacy_system.phase_changed.connect(_on_diplomacy_phase_changed)
 	diplomacy_system.mission_completed.connect(_on_diplomacy_completed)
+	foreign_event_system.news_arrived.connect(_on_foreign_news_arrived)
+	foreign_event_system.decision_requested.connect(_on_foreign_decision_requested)
+	foreign_event_system.event_resolved.connect(_on_foreign_event_resolved)
 	_on_time_changed(game_time.get_display_text())
 	_on_speed_changed(game_time.get_speed_name())
 	_update_map_mode_text()
@@ -51,6 +56,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	messenger_system.advance(delta, game_time.speed_multiplier)
+	foreign_event_system.advance(delta, game_time.speed_multiplier)
 	if diplomacy_system.active:
 		var diplomatic_target: WorldKingdomData = kingdom_state.get_world_kingdom(diplomacy_system.target_id)
 		diplomacy_system.advance(delta, game_time.speed_multiplier, diplomatic_target)
@@ -59,57 +65,51 @@ func _process(delta: float) -> void:
 	if close_enough and Input.is_action_just_pressed("interact") and not map_open:
 		_set_dialogue_open(not dialogue_open)
 		if dialogue_open:
-			dialogue_text.text = "My king, friendship between rulers does not travel faster than a horse.\n\nOpen the world map with M then V. Select a foreign capital. Press T to propose trade or A to propose an alliance."
+			dialogue_text.text = "My king, the world will not wait for us to make the first move. Events beyond our borders may reach us only after the fact."
 	if dialogue_open and Input.is_action_just_pressed("ui_cancel"):
 		_set_dialogue_open(false)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
-			KEY_1:
-				game_time.set_speed(0.0)
-			KEY_2:
-				game_time.set_speed(1.0)
-			KEY_3:
-				game_time.set_speed(10.0)
-			KEY_4:
-				game_time.set_speed(100.0)
-			KEY_M:
-				_toggle_map()
+			KEY_1: game_time.set_speed(0.0)
+			KEY_2: game_time.set_speed(1.0)
+			KEY_3: game_time.set_speed(10.0)
+			KEY_4: game_time.set_speed(100.0)
+			KEY_M: _toggle_map()
 			KEY_V:
-				if map_open:
-					_toggle_world_view()
+				if map_open: _toggle_world_view()
 			KEY_T:
-				if map_open and world_view:
-					_send_diplomatic_proposal("trade")
-				elif map_open and not messenger_system.active:
-					_cycle_selected_region()
+				if map_open and world_view: _send_diplomatic_proposal("trade")
+				elif map_open and not messenger_system.active: _cycle_selected_region()
 			KEY_A:
-				if map_open and world_view:
-					_send_diplomatic_proposal("alliance")
+				if map_open and world_view: _send_diplomatic_proposal("alliance")
 			KEY_O:
-				if map_open and not world_view:
-					_send_regional_order()
+				if map_open and not world_view: _send_regional_order()
+			KEY_R:
+				if foreign_event_system.is_waiting_for_decision(): _choose_coup_response("support")
+			KEY_C:
+				if foreign_event_system.is_waiting_for_decision(): _choose_coup_response("recognize")
+			KEY_N:
+				if foreign_event_system.is_waiting_for_decision(): _choose_coup_response("neutral")
 			KEY_ESCAPE:
-				if map_open:
-					_set_map_open(false)
+				if map_open and not foreign_event_system.is_waiting_for_decision(): _set_map_open(false)
 
 func _toggle_map() -> void:
+	if foreign_event_system.is_waiting_for_decision() and map_open:
+		return
 	_set_map_open(not map_open)
 
 func _set_map_open(open: bool) -> void:
 	map_open = open
 	map_panel.visible = open
-	if open and dialogue_open:
-		_set_dialogue_open(false)
+	if open and dialogue_open: _set_dialogue_open(false)
 	player.set_movement_enabled(not open and not dialogue_open)
 	prompt.visible = false
 	if open:
 		_update_map_mode_text()
-		if world_view:
-			_update_selected_kingdom_display()
-		else:
-			_update_selected_region_display()
+		if world_view: _update_selected_kingdom_display()
+		else: _update_selected_region_display()
 		_update_marker_visibility()
 
 func _toggle_world_view() -> void:
@@ -117,29 +117,27 @@ func _toggle_world_view() -> void:
 	procedural_map.set_world_view(world_view)
 	_update_map_mode_text()
 	_update_marker_visibility()
-	if world_view:
-		_update_selected_kingdom_display()
-	else:
-		_update_selected_region_display()
+	if world_view: _update_selected_kingdom_display()
+	else: _update_selected_region_display()
 
 func _update_marker_visibility() -> void:
-	if world_view:
-		messenger_marker.visible = diplomacy_system.active
-	else:
-		messenger_marker.visible = messenger_system.active
+	if world_view: messenger_marker.visible = diplomacy_system.active
+	else: messenger_marker.visible = messenger_system.active
 
 func _update_map_mode_text() -> void:
 	if world_view:
 		map_title.text = "THE THREE KINGDOMS"
-		map_help.text = "Click capital • T: Trade • A: Alliance • V: Realm view • Esc/M: Close"
+		if foreign_event_system.is_waiting_for_decision():
+			map_help.text = "CRISIS • R: Support Malek • C: Recognize rebels • N: Neutral"
+		else:
+			map_help.text = "Click capital • T: Trade • A: Alliance • V: Realm view • Esc/M: Close"
 	else:
 		map_title.text = "THE YOUNG KINGDOM"
 		map_help.text = "Click region • O: Send order • V: World view • Esc/M: Close"
 
 func _cycle_selected_region() -> void:
 	var ids: Array[String] = kingdom_state.get_region_ids()
-	if ids.is_empty():
-		return
+	if ids.is_empty(): return
 	selected_region_index = (selected_region_index + 1) % ids.size()
 	_update_selected_region_display()
 
@@ -149,8 +147,7 @@ func _select_region_by_id(region_id: String) -> void:
 		return
 	var ids: Array[String] = kingdom_state.get_region_ids()
 	var index: int = ids.find(region_id)
-	if index == -1:
-		return
+	if index == -1: return
 	selected_region_index = index
 	_update_selected_region_display()
 
@@ -160,8 +157,7 @@ func _select_kingdom_by_id(kingdom_id: String) -> void:
 
 func _get_selected_region() -> RegionData:
 	var ids: Array[String] = kingdom_state.get_region_ids()
-	if ids.is_empty():
-		return null
+	if ids.is_empty(): return null
 	return kingdom_state.get_region(ids[selected_region_index])
 
 func _update_selected_region_display() -> void:
@@ -179,7 +175,9 @@ func _update_selected_kingdom_display() -> void:
 		map_status.text = "Click a capital to inspect a neighboring kingdom."
 		return
 	selected_region_label.text = "Selected: %s" % world_kingdom.get_summary()
-	if diplomacy_system.active:
+	if foreign_event_system.is_waiting_for_decision() and world_kingdom.id == "edrath":
+		map_status.text = "COUP IN EDRATH: choose R to support Malek, C to recognize the rebels if they prevail, or N to remain neutral."
+	elif diplomacy_system.active:
 		map_status.text = "An envoy is already abroad. Only one diplomatic mission is supported in this prototype."
 	elif world_kingdom.id == "player":
 		map_status.text = world_kingdom.disposition
@@ -191,10 +189,12 @@ func _send_regional_order() -> void:
 		map_status.text = "A royal messenger is already carrying a matter."
 		return
 	var region: RegionData = _get_selected_region()
-	if region != null:
-		messenger_system.start_journey(region)
+	if region != null: messenger_system.start_journey(region)
 
 func _send_diplomatic_proposal(proposal: String) -> void:
+	if foreign_event_system.is_waiting_for_decision():
+		map_status.text = "The Edrath crisis demands a response first."
+		return
 	if diplomacy_system.active:
 		map_status.text = "Your envoy is already abroad."
 		return
@@ -211,40 +211,45 @@ func _send_diplomatic_proposal(proposal: String) -> void:
 		return
 	diplomacy_system.start_mission(target, proposal, player_kingdom.world_position)
 
+func _choose_coup_response(choice: String) -> void:
+	if not foreign_event_system.choose_response(choice): return
+	var edrath: WorldKingdomData = kingdom_state.get_world_kingdom("edrath")
+	if edrath == null: return
+	if choice == "support":
+		map_status.text = "You order support for King Malek. The decision has been made; now you must wait to learn whether it mattered."
+	elif choice == "recognize":
+		map_status.text = "You prepare to recognize the rebel regime if it secures Sarem. The decision has been made; now you wait for news."
+	else:
+		map_status.text = "You order the kingdom to remain neutral. Whatever happens in Sarem, your forces will stay home."
+	map_help.text = "Decision sent • Time must pass before the outcome is known"
+
 func _set_dialogue_open(open: bool) -> void:
 	dialogue_open = open
 	dialogue_panel.visible = open
 	player.set_movement_enabled(not open and not map_open)
 	prompt.visible = false
 
-func _on_time_changed(display_text: String) -> void:
-	date_label.text = display_text
-
-func _on_speed_changed(speed_name: String) -> void:
-	speed_label.text = "Time: %s   [1 Pause • 2 1x • 3 10x • 4 100x]" % speed_name
+func _on_time_changed(display_text: String) -> void: date_label.text = display_text
+func _on_speed_changed(speed_name: String) -> void: speed_label.text = "Time: %s   [1 Pause • 2 1x • 3 10x • 4 100x]" % speed_name
 
 func _on_journey_started(target_id: String) -> void:
 	if not world_view:
 		messenger_marker.visible = true
 		messenger_marker.position = kingdom_state.capital_position
 	var region: RegionData = kingdom_state.get_region(target_id)
-	if region != null and not world_view:
-		selected_region_label.text = "Active route: %s" % region.get_summary()
+	if region != null and not world_view: selected_region_label.text = "Active route: %s" % region.get_summary()
 
 func _on_journey_progress(progress: float, returning: bool, target_id: String) -> void:
-	if world_view:
-		return
+	if world_view: return
 	var route: PackedVector2Array = kingdom_state.get_route(target_id)
-	if route.size() < 2:
-		return
+	if route.size() < 2: return
 	var route_progress: float = 1.0 - progress if returning else progress
 	messenger_marker.position = _position_along_route(route, route_progress)
 
 func _position_along_route(route: PackedVector2Array, progress: float) -> Vector2:
 	progress = clampf(progress, 0.0, 1.0)
 	var total_length: float = 0.0
-	for i in range(route.size() - 1):
-		total_length += route[i].distance_to(route[i + 1])
+	for i in range(route.size() - 1): total_length += route[i].distance_to(route[i + 1])
 	var target_distance: float = total_length * progress
 	var traveled: float = 0.0
 	for i in range(route.size() - 1):
@@ -256,8 +261,7 @@ func _position_along_route(route: PackedVector2Array, progress: float) -> Vector
 	return route[route.size() - 1]
 
 func _on_messenger_phase_changed(text: String) -> void:
-	if not world_view:
-		map_status.text = text
+	if not world_view: map_status.text = text
 
 func _on_journey_completed(_target_id: String) -> void:
 	if not world_view:
@@ -266,35 +270,27 @@ func _on_journey_completed(_target_id: String) -> void:
 		_update_selected_region_display()
 
 func _on_diplomacy_started(target_id: String, proposal: String) -> void:
-	if not world_view:
-		return
+	if not world_view: return
 	var player_kingdom: WorldKingdomData = kingdom_state.get_world_kingdom("player")
-	if player_kingdom != null:
-		messenger_marker.position = player_kingdom.world_position
+	if player_kingdom != null: messenger_marker.position = player_kingdom.world_position
 	messenger_marker.visible = true
 	selected_kingdom_id = target_id
 	selected_region_label.text = "Envoy mission: %s" % proposal.capitalize()
 
 func _on_diplomacy_progress(progress: float, returning: bool, target_id: String) -> void:
-	if not world_view:
-		return
+	if not world_view: return
 	var player_kingdom: WorldKingdomData = kingdom_state.get_world_kingdom("player")
 	var target: WorldKingdomData = kingdom_state.get_world_kingdom(target_id)
-	if player_kingdom == null or target == null:
-		return
-	if returning:
-		messenger_marker.position = target.world_position.lerp(player_kingdom.world_position, progress)
-	else:
-		messenger_marker.position = player_kingdom.world_position.lerp(target.world_position, progress)
+	if player_kingdom == null or target == null: return
+	if returning: messenger_marker.position = target.world_position.lerp(player_kingdom.world_position, progress)
+	else: messenger_marker.position = player_kingdom.world_position.lerp(target.world_position, progress)
 
 func _on_diplomacy_phase_changed(text: String) -> void:
-	if world_view:
-		map_status.text = text
+	if world_view: map_status.text = text
 
 func _on_diplomacy_completed(target_id: String, proposal: String, outcome: String) -> void:
 	var target: WorldKingdomData = kingdom_state.get_world_kingdom(target_id)
-	if target == null:
-		return
+	if target == null: return
 	var result_text: String = ""
 	if proposal == "trade":
 		if outcome == "accepted":
@@ -303,7 +299,7 @@ func _on_diplomacy_completed(target_id: String, proposal: String, outcome: Strin
 			result_text = "%s accepted a trade agreement. Relations improved." % target.ruler_name
 		elif outcome == "countered":
 			target.change_relation(2)
-			result_text = "%s declined full trade, but offered a limited border market instead. Counteroffer received." % target.ruler_name
+			result_text = "%s declined full trade, but offered a limited border market instead." % target.ruler_name
 		else:
 			target.change_relation(-3)
 			result_text = "%s refused the trade proposal." % target.ruler_name
@@ -323,4 +319,40 @@ func _on_diplomacy_completed(target_id: String, proposal: String, outcome: Strin
 		messenger_marker.visible = false
 		selected_region_label.text = "Reply: %s" % target.get_summary()
 		map_status.text = result_text
+	procedural_map.queue_redraw()
+
+func _on_foreign_news_arrived(text: String) -> void:
+	game_time.set_speed(0.0)
+	world_view = true
+	procedural_map.set_world_view(true)
+	selected_kingdom_id = "edrath"
+	_set_map_open(true)
+	_update_map_mode_text()
+	var edrath: WorldKingdomData = kingdom_state.get_world_kingdom("edrath")
+	if edrath != null: selected_region_label.text = "CRISIS: %s" % edrath.get_summary()
+	map_status.text = text
+
+func _on_foreign_decision_requested(text: String) -> void:
+	_update_map_mode_text()
+	map_status.text += "\n\n" + text
+
+func _on_foreign_event_resolved(text: String) -> void:
+	var edrath: WorldKingdomData = kingdom_state.get_world_kingdom("edrath")
+	if edrath == null: return
+	if foreign_event_system.decision == "support":
+		edrath.change_relation(20)
+		edrath.disposition = "King Malek survived the coup and remembers your support."
+	else:
+		edrath.ruler_name = "Varos"
+		edrath.alliance = false
+		if foreign_event_system.decision == "recognize":
+			edrath.change_relation(15)
+			edrath.disposition = "King Varos seized the throne and values your early recognition."
+		else:
+			edrath.change_relation(-5)
+			edrath.disposition = "King Varos seized the throne. Your neutrality avoided war but earned little trust."
+	selected_kingdom_id = "edrath"
+	_update_map_mode_text()
+	selected_region_label.text = "AFTERMATH: %s" % edrath.get_summary()
+	map_status.text = text
 	procedural_map.queue_redraw()
