@@ -20,6 +20,7 @@ extends Node2D
 
 var diplomacy_system: DiplomacySystem = DiplomacySystem.new()
 var foreign_event_system: ForeignEventSystem = ForeignEventSystem.new()
+var regional_decision_system: RegionalDecisionSystem = RegionalDecisionSystem.new()
 var dialogue_open: bool = false
 var map_open: bool = false
 var world_view: bool = false
@@ -29,6 +30,7 @@ var selected_kingdom_id: String = "player"
 func _ready() -> void:
 	add_child(diplomacy_system)
 	add_child(foreign_event_system)
+	add_child(regional_decision_system)
 	dialogue_panel.visible = false
 	prompt.visible = false
 	map_panel.visible = false
@@ -49,6 +51,8 @@ func _ready() -> void:
 	foreign_event_system.news_arrived.connect(_on_foreign_news_arrived)
 	foreign_event_system.decision_requested.connect(_on_foreign_decision_requested)
 	foreign_event_system.event_resolved.connect(_on_foreign_event_resolved)
+	regional_decision_system.crisis_arrived.connect(_on_regional_crisis_arrived)
+	regional_decision_system.decision_requested.connect(_on_regional_decision_requested)
 	_on_time_changed(game_time.get_display_text())
 	_on_speed_changed(game_time.get_speed_name())
 	_update_map_mode_text()
@@ -57,6 +61,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	messenger_system.advance(delta, game_time.speed_multiplier)
 	foreign_event_system.advance(delta, game_time.speed_multiplier)
+	regional_decision_system.advance(delta, game_time.speed_multiplier)
 	if diplomacy_system.active:
 		var diplomatic_target: WorldKingdomData = kingdom_state.get_world_kingdom(diplomacy_system.target_id)
 		var diplomatic_ruler: CharacterData = kingdom_state.get_ruler_for_kingdom(diplomacy_system.target_id)
@@ -95,11 +100,17 @@ func _unhandled_input(event: InputEvent) -> void:
 				if foreign_event_system.is_waiting_for_decision(): _choose_coup_response("recognize")
 			KEY_N:
 				if foreign_event_system.is_waiting_for_decision(): _choose_coup_response("neutral")
+			KEY_H:
+				if regional_decision_system.is_waiting_for_decision(): _choose_regional_response("hunt")
+			KEY_G:
+				if regional_decision_system.is_waiting_for_decision(): _choose_regional_response("guard")
+			KEY_P:
+				if regional_decision_system.is_waiting_for_decision(): _choose_regional_response("pardon")
 			KEY_ESCAPE:
-				if map_open and not foreign_event_system.is_waiting_for_decision(): _set_map_open(false)
+				if map_open and not foreign_event_system.is_waiting_for_decision() and not regional_decision_system.is_waiting_for_decision(): _set_map_open(false)
 
 func _toggle_map() -> void:
-	if foreign_event_system.is_waiting_for_decision() and map_open:
+	if (foreign_event_system.is_waiting_for_decision() or regional_decision_system.is_waiting_for_decision()) and map_open:
 		return
 	_set_map_open(not map_open)
 
@@ -116,6 +127,7 @@ func _set_map_open(open: bool) -> void:
 		_update_marker_visibility()
 
 func _toggle_world_view() -> void:
+	if foreign_event_system.is_waiting_for_decision() or regional_decision_system.is_waiting_for_decision(): return
 	world_view = not world_view
 	procedural_map.set_world_view(world_view)
 	_update_map_mode_text()
@@ -136,7 +148,10 @@ func _update_map_mode_text() -> void:
 			map_help.text = "Click capital • T: Trade • A: Alliance • V: Realm view • Esc/M: Close"
 	else:
 		map_title.text = "THE YOUNG KINGDOM"
-		map_help.text = "Click region • O: Send order • V: World view • Esc/M: Close"
+		if regional_decision_system.is_waiting_for_decision():
+			map_help.text = "BANDITS • H: Hunt • G: Guard roads • P: Offer pardon"
+		else:
+			map_help.text = "Click region • O: Send order • V: World view • Esc/M: Close"
 
 func _cycle_selected_region() -> void:
 	var ids: Array[String] = kingdom_state.get_region_ids()
@@ -179,7 +194,7 @@ func _update_selected_kingdom_display() -> void:
 		return
 	var ruler: CharacterData = kingdom_state.get_ruler_for_kingdom(world_kingdom.id)
 	if ruler != null:
-		selected_region_label.text = "Selected: %s\n%s" % [world_kingdom.get_summary(), ruler.get_summary()]
+		selected_region_label.text = "Selected: %s" % world_kingdom.get_summary()
 	else:
 		selected_region_label.text = "Selected: %s" % world_kingdom.get_summary()
 	if foreign_event_system.is_waiting_for_decision() and world_kingdom.id == "edrath":
@@ -189,10 +204,14 @@ func _update_selected_kingdom_display() -> void:
 	elif world_kingdom.id == "player":
 		map_status.text = world_kingdom.disposition
 	else:
+		var profile_text: String = ruler.get_summary() if ruler != null else "Ruler profile unavailable."
 		var memory_text: String = ruler.get_memory_summary() if ruler != null else "Memories: unavailable."
-		map_status.text = "%s\n%s\nT: propose trade • A: propose alliance" % [world_kingdom.disposition, memory_text]
+		map_status.text = "%s\n%s\n%s\nT: propose trade • A: propose alliance" % [world_kingdom.disposition, profile_text, memory_text]
 
 func _send_regional_order() -> void:
+	if regional_decision_system.is_waiting_for_decision():
+		map_status.text = "Choose how to answer the Northern March first."
+		return
 	if messenger_system.active:
 		map_status.text = "A royal messenger is already carrying a matter."
 		return
@@ -230,6 +249,24 @@ func _choose_coup_response(choice: String) -> void:
 	else:
 		map_status.text = "You order the kingdom to remain neutral. Whatever happens in Sarem, your forces will stay home."
 	map_help.text = "Decision sent • Time must pass before the outcome is known"
+
+func _choose_regional_response(choice: String) -> void:
+	if messenger_system.active:
+		map_status.text = "Another royal messenger is still abroad. The March must wait for his return."
+		return
+	if not regional_decision_system.choose_response(choice): return
+	var northern_march: RegionData = kingdom_state.get_region("northern_march")
+	if northern_march == null: return
+	var order_text: String = ""
+	if choice == "hunt":
+		order_text = "orders to hunt the bandits aggressively"
+	elif choice == "guard":
+		order_text = "orders to guard the merchant roads"
+	else:
+		order_text = "an offer of pardon in exchange for frontier service"
+	messenger_system.start_journey(northern_march, order_text, regional_decision_system.report_text)
+	map_help.text = "Decision sent • Watch the messenger carry your instructions"
+	map_status.text = "Your decision is made. Northern March will not act until the royal messenger arrives."
 
 func _set_dialogue_open(open: bool) -> void:
 	dialogue_open = open
@@ -275,7 +312,16 @@ func _on_journey_completed(_target_id: String) -> void:
 	if not world_view:
 		messenger_marker.position = kingdom_state.capital_position
 		messenger_marker.visible = false
-		_update_selected_region_display()
+		if regional_decision_system.phase == "order_in_transit":
+			var steward: CharacterData = kingdom_state.get_character("steward")
+			if steward != null:
+				steward.remember("northern_bandits_%s" % regional_decision_system.choice, regional_decision_system.memory_description, regional_decision_system.memory_weight)
+			regional_decision_system.complete_decision()
+			_update_map_mode_text()
+			selected_region_label.text = "REPORT FROM NORTHERN MARCH"
+			map_status.text = messenger_system.last_report
+		else:
+			_update_selected_region_display()
 
 func _on_diplomacy_started(target_id: String, proposal: String) -> void:
 	if not world_view: return
@@ -373,3 +419,19 @@ func _on_foreign_event_resolved(text: String) -> void:
 	selected_region_label.text = "AFTERMATH: %s" % edrath.get_summary()
 	map_status.text = text
 	procedural_map.queue_redraw()
+
+func _on_regional_crisis_arrived(text: String) -> void:
+	game_time.set_speed(0.0)
+	world_view = false
+	procedural_map.set_world_view(false)
+	var ids: Array[String] = kingdom_state.get_region_ids()
+	var northern_index: int = ids.find("northern_march")
+	if northern_index >= 0: selected_region_index = northern_index
+	_set_map_open(true)
+	_update_map_mode_text()
+	selected_region_label.text = "URGENT REPORT: NORTHERN MARCH"
+	map_status.text = text
+
+func _on_regional_decision_requested(text: String) -> void:
+	_update_map_mode_text()
+	map_status.text += "\n\n" + text
