@@ -16,8 +16,12 @@ var crossing_points: Dictionary = {}
 var mountain_pass_position := Vector2.ZERO
 var map_seed := 271828
 
+var world_kingdoms: Dictionary = {}
+var world_kingdom_order: Array[String] = []
+
 func _ready() -> void:
 	generate_geography(map_seed)
+	_build_world_kingdoms()
 
 func generate_geography(seed: int) -> void:
 	map_seed = seed
@@ -66,6 +70,51 @@ func generate_geography(seed: int) -> void:
 	_build_routes()
 	_build_territories()
 
+func _build_world_kingdoms() -> void:
+	world_kingdoms.clear()
+	world_kingdom_order.clear()
+
+	_add_world_kingdom(WorldKingdomData.new(
+		"player",
+		"The Young Kingdom",
+		"the New King",
+		"King",
+		"The Capital",
+		Vector2(480.0, 205.0),
+		PackedVector2Array([Vector2(290, 70), Vector2(650, 70), Vector2(710, 190), Vector2(625, 315), Vector2(310, 300), Vector2(245, 175)]),
+		100,
+		"Your Realm",
+		"A young monarchy still consolidating the founder's realm."
+	))
+	_add_world_kingdom(WorldKingdomData.new(
+		"edrath",
+		"Kingdom of Edrath",
+		"Malek",
+		"King",
+		"Sarem",
+		Vector2(145.0, 165.0),
+		PackedVector2Array([Vector2(0, 40), Vector2(290, 70), Vector2(245, 175), Vector2(310, 300), Vector2(0, 320)]),
+		35,
+		"Friendly",
+		"A prosperous western neighbor that values trade and stable borders."
+	))
+	_add_world_kingdom(WorldKingdomData.new(
+		"tirath",
+		"Kingdom of Tirath",
+		"Oren",
+		"King",
+		"Hadrim",
+		Vector2(820.0, 165.0),
+		PackedVector2Array([Vector2(650, 70), Vector2(960, 35), Vector2(960, 325), Vector2(625, 315), Vector2(710, 190)]),
+		-20,
+		"Wary",
+		"A militarized eastern kingdom that respects strength and watches your frontier closely."
+	))
+
+func _add_world_kingdom(kingdom: WorldKingdomData) -> void:
+	world_kingdoms[kingdom.id] = kingdom
+	world_kingdom_order.append(kingdom.id)
+
 func _add_generated_region(region_id: String, name: String, position: Vector2, terrain: String, road: String, terrain_mod: float, road_mod: float, response_minutes: float) -> void:
 	var crosses_river: bool = _route_crosses_river(capital_position, position)
 	_add_region(RegionData.new(region_id, name, position, terrain, road, 180.0, response_minutes, crosses_river, terrain_mod, road_mod))
@@ -101,18 +150,10 @@ func _find_crossing_for_route(origin: Vector2, destination: Vector2) -> Vector2:
 	return Vector2(_river_x_at_y(desired_y), desired_y)
 
 func _build_territories() -> void:
-	territory_polygons["capital"] = PackedVector2Array([
-		Vector2(55, 175), Vector2(330, 155), Vector2(430, 225), Vector2(400, 340), Vector2(55, 340)
-	])
-	territory_polygons["western_hills"] = PackedVector2Array([
-		Vector2(55, 0), Vector2(500, 0), Vector2(455, 155), Vector2(330, 155), Vector2(55, 175)
-	])
-	territory_polygons["riverlands"] = PackedVector2Array([
-		Vector2(430, 225), Vector2(960, 190), Vector2(960, 340), Vector2(400, 340)
-	])
-	territory_polygons["northern_march"] = PackedVector2Array([
-		Vector2(500, 0), Vector2(960, 0), Vector2(960, 190), Vector2(430, 225), Vector2(455, 155)
-	])
+	territory_polygons["capital"] = PackedVector2Array([Vector2(55, 175), Vector2(330, 155), Vector2(430, 225), Vector2(400, 340), Vector2(55, 340)])
+	territory_polygons["western_hills"] = PackedVector2Array([Vector2(55, 0), Vector2(500, 0), Vector2(455, 155), Vector2(330, 155), Vector2(55, 175)])
+	territory_polygons["riverlands"] = PackedVector2Array([Vector2(430, 225), Vector2(960, 190), Vector2(960, 340), Vector2(400, 340)])
+	territory_polygons["northern_march"] = PackedVector2Array([Vector2(500, 0), Vector2(960, 0), Vector2(960, 190), Vector2(430, 225), Vector2(455, 155)])
 
 func _route_crosses_river(origin: Vector2, destination: Vector2) -> bool:
 	var origin_side: float = origin.x - _river_x_at_y(origin.y)
@@ -146,3 +187,9 @@ func get_route(region_id: String) -> PackedVector2Array:
 	if value is PackedVector2Array:
 		return value
 	return PackedVector2Array()
+
+func get_world_kingdom(kingdom_id: String) -> WorldKingdomData:
+	return world_kingdoms.get(kingdom_id) as WorldKingdomData
+
+func get_world_kingdom_ids() -> Array[String]:
+	return world_kingdom_order.duplicate()
