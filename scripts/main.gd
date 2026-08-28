@@ -545,6 +545,5 @@ func _on_regional_decision_requested(text: String) -> void:
 
 func _on_marriage_council_called(text: String) -> void:
 	_record_chronicle("Dynasty", "The Marriage Council", text)
-	game_time.set_speed(0.0)
 	_set_dynasty_open(true)
 	_refresh_dynasty_text()
