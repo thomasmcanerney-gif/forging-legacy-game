@@ -15,8 +15,11 @@ var target_id := ""
 var target_name := ""
 var one_way_travel_minutes := 0.0
 var regional_response_delay_minutes := 0.0
+var order_description: String = "your order"
+var response_report: String = ""
+var last_report: String = ""
 
-func start_journey(region: RegionData) -> bool:
+func start_journey(region: RegionData, custom_order: String = "your order", custom_report: String = "") -> bool:
 	if active:
 		return false
 
@@ -29,9 +32,12 @@ func start_journey(region: RegionData) -> bool:
 	target_name = region.display_name
 	one_way_travel_minutes = region.travel_minutes_from_capital
 	regional_response_delay_minutes = region.response_delay_minutes
+	order_description = custom_order
+	response_report = custom_report
+	last_report = ""
 
 	journey_started.emit(target_id)
-	phase_changed.emit("Messenger departed the capital for %s with your order." % target_name)
+	phase_changed.emit("Messenger departed the capital for %s with %s." % [target_name, order_description])
 	journey_progress.emit(0.0, false, target_id)
 	return true
 
@@ -61,9 +67,10 @@ func advance(delta: float, game_speed: float) -> void:
 	if returning:
 		active = false
 		returning = false
-		phase_changed.emit("Response received from %s: the governor reports that your order has been carried out." % target_name)
+		last_report = response_report if not response_report.is_empty() else "The governor reports that your order has been carried out."
+		phase_changed.emit("Response received from %s: %s" % [target_name, last_report])
 		journey_completed.emit(target_id)
 	else:
 		waiting_for_response = true
 		response_delay_remaining = regional_response_delay_minutes
-		phase_changed.emit("Your order reached %s. The governor is carrying it out." % target_name)
+		phase_changed.emit("Your instructions reached %s. The governor is carrying them out." % target_name)
