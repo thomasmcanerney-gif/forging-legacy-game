@@ -19,11 +19,15 @@ extends Node2D
 @onready var messenger_marker: Polygon2D = $UI/MapPanel/ProceduralMap/Messenger
 @onready var chronicle_panel: Panel = $UI/ChroniclePanel
 @onready var chronicle_text: RichTextLabel = $UI/ChroniclePanel/ChronicleText
+@onready var dynasty_panel: Panel = $UI/DynastyPanel
+@onready var dynasty_text: Label = $UI/DynastyPanel/DynastyText
+@onready var dynasty_help: Label = $UI/DynastyPanel/DynastyHelp
 
 var diplomacy_system: DiplomacySystem = DiplomacySystem.new()
 var foreign_event_system: ForeignEventSystem = ForeignEventSystem.new()
 var regional_decision_system: RegionalDecisionSystem = RegionalDecisionSystem.new()
 var chronicle: Chronicle = Chronicle.new()
+var dynasty_system: DynastySystem = DynastySystem.new()
 var dialogue_open: bool = false
 var map_open: bool = false
 var world_view: bool = false
@@ -31,15 +35,19 @@ var selected_region_index: int = 0
 var selected_kingdom_id: String = "player"
 var chronicle_open: bool = false
 var speed_before_chronicle: float = 1.0
+var dynasty_open: bool = false
+var speed_before_dynasty: float = 1.0
 
 func _ready() -> void:
 	add_child(diplomacy_system)
 	add_child(foreign_event_system)
 	add_child(regional_decision_system)
+	add_child(dynasty_system)
 	dialogue_panel.visible = false
 	prompt.visible = false
 	map_panel.visible = false
 	chronicle_panel.visible = false
+	dynasty_panel.visible = false
 	messenger_marker.visible = false
 	procedural_map.setup(kingdom_state)
 	procedural_map.region_clicked.connect(_select_region_by_id)
@@ -59,6 +67,7 @@ func _ready() -> void:
 	foreign_event_system.event_resolved.connect(_on_foreign_event_resolved)
 	regional_decision_system.crisis_arrived.connect(_on_regional_crisis_arrived)
 	regional_decision_system.decision_requested.connect(_on_regional_decision_requested)
+	dynasty_system.marriage_council_called.connect(_on_marriage_council_called)
 	_on_time_changed(game_time.get_display_text())
 	_on_speed_changed(game_time.get_speed_name())
 	_update_map_mode_text()
@@ -69,13 +78,14 @@ func _process(delta: float) -> void:
 	messenger_system.advance(delta, game_time.speed_multiplier)
 	foreign_event_system.advance(delta, game_time.speed_multiplier)
 	regional_decision_system.advance(delta, game_time.speed_multiplier)
+	dynasty_system.advance(delta, game_time.speed_multiplier)
 	if diplomacy_system.active:
 		var diplomatic_target: WorldKingdomData = kingdom_state.get_world_kingdom(diplomacy_system.target_id)
 		var diplomatic_ruler: CharacterData = kingdom_state.get_ruler_for_kingdom(diplomacy_system.target_id)
 		diplomacy_system.advance(delta, game_time.speed_multiplier, diplomatic_target, diplomatic_ruler)
 	var close_enough: bool = player.global_position.distance_to(advisor.global_position) < 90.0
-	prompt.visible = close_enough and not dialogue_open and not map_open and not chronicle_open
-	if close_enough and Input.is_action_just_pressed("interact") and not map_open and not chronicle_open:
+	prompt.visible = close_enough and not dialogue_open and not map_open and not chronicle_open and not dynasty_open
+	if close_enough and Input.is_action_just_pressed("interact") and not map_open and not chronicle_open and not dynasty_open:
 		_set_dialogue_open(not dialogue_open)
 		if dialogue_open:
 			var steward: CharacterData = kingdom_state.get_character("steward")
@@ -93,6 +103,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_4: game_time.set_speed(100.0)
 			KEY_M: _toggle_map()
 			KEY_K: _toggle_chronicle()
+			KEY_J: _toggle_dynasty()
+			KEY_E:
+				if dynasty_system.is_waiting_for_marriage(): _choose_spouse("elara")
+			KEY_S:
+				if dynasty_system.is_waiting_for_marriage(): _choose_spouse("sabine")
 			KEY_V:
 				if map_open: _toggle_world_view()
 			KEY_T:
@@ -115,10 +130,59 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_P:
 				if regional_decision_system.is_waiting_for_decision(): _choose_regional_response("pardon")
 			KEY_ESCAPE:
-				if chronicle_open: _set_chronicle_open(false)
+				if dynasty_open and not dynasty_system.is_waiting_for_marriage(): _set_dynasty_open(false)
+				elif chronicle_open: _set_chronicle_open(false)
 				elif map_open and not foreign_event_system.is_waiting_for_decision() and not regional_decision_system.is_waiting_for_decision(): _set_map_open(false)
 
+func _toggle_dynasty() -> void:
+	if foreign_event_system.is_waiting_for_decision() or regional_decision_system.is_waiting_for_decision() or dynasty_system.is_waiting_for_marriage():
+		return
+	_set_dynasty_open(not dynasty_open)
+
+func _set_dynasty_open(open: bool) -> void:
+	dynasty_open = open
+	dynasty_panel.visible = open
+	if open:
+		if map_open: _set_map_open(false)
+		if dialogue_open: _set_dialogue_open(false)
+		if chronicle_open: _set_chronicle_open(false)
+		speed_before_dynasty = game_time.speed_multiplier
+		game_time.set_speed(0.0)
+		_refresh_dynasty_text()
+	else:
+		game_time.set_speed(speed_before_dynasty)
+	player.set_movement_enabled(not open and not map_open and not dialogue_open and not chronicle_open)
+	prompt.visible = false
+
+func _refresh_dynasty_text() -> void:
+	if dynasty_system.is_waiting_for_marriage():
+		var elara: CharacterData = kingdom_state.get_character("elara")
+		var sabine: CharacterData = kingdom_state.get_character("sabine")
+		dynasty_text.text = "THE MARRIAGE COUNCIL\n\nE — LADY ELARA OF RIVERLANDS\n%s\n\nA diplomatic match favored by merchants and peacemakers.\n\nS — LADY SABINE OF THE WESTERN HILLS\n%s\n\nA powerful match favored by soldiers and the western nobility." % [elara.get_summary(), sabine.get_summary()]
+		dynasty_help.text = "Choose E: Elara • S: Sabine"
+		return
+	var king: CharacterData = kingdom_state.get_character("player_king")
+	var queen_mother: CharacterData = kingdom_state.get_character("queen_mother")
+	var spouse: CharacterData = kingdom_state.get_character(dynasty_system.spouse_id) if not dynasty_system.spouse_id.is_empty() else null
+	dynasty_text.text = dynasty_system.get_family_summary(king, queen_mother, spouse)
+	dynasty_help.text = "J or Esc: Close"
+
+func _choose_spouse(candidate_id: String) -> void:
+	if not dynasty_system.choose_spouse(candidate_id): return
+	var spouse: CharacterData = kingdom_state.get_character(candidate_id)
+	var queen_mother: CharacterData = kingdom_state.get_character("queen_mother")
+	if spouse != null:
+		spouse.title = "Queen"
+		spouse.remember("royal_marriage", "King Aldren chose her as his queen", 20)
+	if queen_mother != null:
+		queen_mother.remember("aldren_married", "The king secured the royal marriage", 8)
+	var match_description: String = "Lady Elara of Riverlands, a diplomatic and compassionate noblewoman." if candidate_id == "elara" else "Lady Sabine of the Western Hills, a bold and ambitious noblewoman."
+	_record_chronicle("Dynasty", "The Marriage of King Aldren", "King Aldren took as his queen %s" % match_description)
+	dynasty_help.text = "The royal marriage is concluded • J or Esc: Close"
+	_refresh_dynasty_text()
+
 func _toggle_chronicle() -> void:
+	if dynasty_open: return
 	if foreign_event_system.is_waiting_for_decision() or regional_decision_system.is_waiting_for_decision():
 		return
 	_set_chronicle_open(not chronicle_open)
@@ -143,7 +207,7 @@ func _record_chronicle(category: String, title: String, description: String) -> 
 		chronicle_text.text = chronicle.get_display_text()
 
 func _toggle_map() -> void:
-	if chronicle_open: return
+	if chronicle_open or dynasty_open: return
 	if (foreign_event_system.is_waiting_for_decision() or regional_decision_system.is_waiting_for_decision()) and map_open:
 		return
 	_set_map_open(not map_open)
@@ -478,3 +542,9 @@ func _on_regional_crisis_arrived(text: String) -> void:
 func _on_regional_decision_requested(text: String) -> void:
 	_update_map_mode_text()
 	map_status.text += "\n\n" + text
+
+func _on_marriage_council_called(text: String) -> void:
+	_record_chronicle("Dynasty", "The Marriage Council", text)
+	game_time.set_speed(0.0)
+	_set_dynasty_open(true)
+	_refresh_dynasty_text()
