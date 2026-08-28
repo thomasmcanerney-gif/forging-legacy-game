@@ -18,9 +18,11 @@ var map_seed := 271828
 
 var world_kingdoms: Dictionary = {}
 var world_kingdom_order: Array[String] = []
+var characters: Dictionary = {}
 
 func _ready() -> void:
 	generate_geography(map_seed)
+	_build_characters()
 	_build_world_kingdoms()
 
 func generate_geography(seed: int) -> void:
@@ -69,6 +71,29 @@ func generate_geography(seed: int) -> void:
 
 	_build_routes()
 	_build_territories()
+
+func _build_characters() -> void:
+	characters.clear()
+	_add_character(CharacterData.new("player_king", "Aldren", "King", 24, ["Resolute", "Inexperienced"], ["Unify the realm", "Found a lasting dynasty"], 100, 100))
+	_add_character(CharacterData.new("steward", "Edric", "Steward", 58, ["Patient", "Pragmatic"], ["A stable treasury", "A capable monarch"], 72, 45))
+	_add_character(CharacterData.new("malek", "Malek", "King", 46, ["Loyal", "Pragmatic"], ["Prosperous trade", "Secure borders"], 100, 35))
+	_add_character(CharacterData.new("oren", "Oren", "King", 51, ["Proud", "Suspicious"], ["Secure borders", "Regional dominance"], 100, -20))
+	_add_character(CharacterData.new("varos", "Varos", "King", 39, ["Ambitious", "Pragmatic"], ["Legitimate rule", "Prosperous trade"], 100, -5))
+
+func _add_character(character: CharacterData) -> void:
+	characters[character.id] = character
+
+func get_character(character_id: String) -> CharacterData:
+	return characters.get(character_id) as CharacterData
+
+func get_ruler_for_kingdom(kingdom_id: String) -> CharacterData:
+	if kingdom_id == "player": return get_character("player_king")
+	if kingdom_id == "edrath":
+		var edrath: WorldKingdomData = get_world_kingdom("edrath")
+		if edrath != null and edrath.ruler_name == "Varos": return get_character("varos")
+		return get_character("malek")
+	if kingdom_id == "tirath": return get_character("oren")
+	return null
 
 func _build_world_kingdoms() -> void:
 	world_kingdoms.clear()
