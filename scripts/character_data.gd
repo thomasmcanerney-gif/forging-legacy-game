@@ -9,6 +9,7 @@ var traits: Array[String]
 var desires: Array[String]
 var loyalty: int
 var opinion_of_player: int
+var base_opinion_of_player: int
 var memories: Array[Dictionary] = []
 
 func _init(
@@ -28,7 +29,8 @@ func _init(
 	traits = character_traits
 	desires = character_desires
 	loyalty = clampi(starting_loyalty, -100, 100)
-	opinion_of_player = clampi(starting_opinion, -100, 100)
+	base_opinion_of_player = clampi(starting_opinion, -100, 100)
+	opinion_of_player = base_opinion_of_player
 
 func remember(memory_id: String, description: String, emotional_weight: int) -> void:
 	for memory in memories:
@@ -84,4 +86,4 @@ func get_memory_summary() -> String:
 
 func _recalculate_opinion() -> void:
 	var memory_total: int = get_memory_influence()
-	opinion_of_player = clampi(opinion_of_player + memory_total, -100, 100)
+	opinion_of_player = clampi(base_opinion_of_player + memory_total, -100, 100)
