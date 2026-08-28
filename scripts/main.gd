@@ -18,13 +18,15 @@ extends Node2D
 @onready var procedural_map: ProceduralMap = $UI/MapPanel/ProceduralMap
 @onready var messenger_marker: Polygon2D = $UI/MapPanel/ProceduralMap/Messenger
 
-var dialogue_open := false
-var map_open := false
-var world_view := false
-var selected_region_index := 0
-var selected_kingdom_id := "player"
+var diplomacy_system: DiplomacySystem = DiplomacySystem.new()
+var dialogue_open: bool = false
+var map_open: bool = false
+var world_view: bool = false
+var selected_region_index: int = 0
+var selected_kingdom_id: String = "player"
 
 func _ready() -> void:
+	add_child(diplomacy_system)
 	dialogue_panel.visible = false
 	prompt.visible = false
 	map_panel.visible = false
@@ -38,6 +40,10 @@ func _ready() -> void:
 	messenger_system.journey_progress.connect(_on_journey_progress)
 	messenger_system.phase_changed.connect(_on_messenger_phase_changed)
 	messenger_system.journey_completed.connect(_on_journey_completed)
+	diplomacy_system.mission_started.connect(_on_diplomacy_started)
+	diplomacy_system.mission_progress.connect(_on_diplomacy_progress)
+	diplomacy_system.phase_changed.connect(_on_diplomacy_phase_changed)
+	diplomacy_system.mission_completed.connect(_on_diplomacy_completed)
 	_on_time_changed(game_time.get_display_text())
 	_on_speed_changed(game_time.get_speed_name())
 	_update_map_mode_text()
@@ -45,12 +51,15 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	messenger_system.advance(delta, game_time.speed_multiplier)
+	if diplomacy_system.active:
+		var diplomatic_target: WorldKingdomData = kingdom_state.get_world_kingdom(diplomacy_system.target_id)
+		diplomacy_system.advance(delta, game_time.speed_multiplier, diplomatic_target)
 	var close_enough: bool = player.global_position.distance_to(advisor.global_position) < 90.0
 	prompt.visible = close_enough and not dialogue_open and not map_open
 	if close_enough and Input.is_action_just_pressed("interact") and not map_open:
 		_set_dialogue_open(not dialogue_open)
 		if dialogue_open:
-			dialogue_text.text = "My king, our borders do not end the world. Edrath lies to the west and Tirath to the east.\n\nOpen the map with M. Press V to change between the realm and the wider world."
+			dialogue_text.text = "My king, friendship between rulers does not travel faster than a horse.\n\nOpen the world map with M then V. Select a foreign capital. Press T to propose trade or A to propose an alliance."
 	if dialogue_open and Input.is_action_just_pressed("ui_cancel"):
 		_set_dialogue_open(false)
 
@@ -71,8 +80,13 @@ func _unhandled_input(event: InputEvent) -> void:
 				if map_open:
 					_toggle_world_view()
 			KEY_T:
-				if map_open and not world_view and not messenger_system.active:
+				if map_open and world_view:
+					_send_diplomatic_proposal("trade")
+				elif map_open and not messenger_system.active:
 					_cycle_selected_region()
+			KEY_A:
+				if map_open and world_view:
+					_send_diplomatic_proposal("alliance")
 			KEY_O:
 				if map_open and not world_view:
 					_send_regional_order()
@@ -94,26 +108,33 @@ func _set_map_open(open: bool) -> void:
 		_update_map_mode_text()
 		if world_view:
 			_update_selected_kingdom_display()
-		elif not messenger_system.active:
+		else:
 			_update_selected_region_display()
+		_update_marker_visibility()
 
 func _toggle_world_view() -> void:
 	world_view = not world_view
 	procedural_map.set_world_view(world_view)
-	messenger_marker.visible = messenger_system.active and not world_view
 	_update_map_mode_text()
+	_update_marker_visibility()
 	if world_view:
 		_update_selected_kingdom_display()
 	else:
 		_update_selected_region_display()
 
+func _update_marker_visibility() -> void:
+	if world_view:
+		messenger_marker.visible = diplomacy_system.active
+	else:
+		messenger_marker.visible = messenger_system.active
+
 func _update_map_mode_text() -> void:
 	if world_view:
 		map_title.text = "THE THREE KINGDOMS"
-		map_help.text = "Click a capital • V: Realm view • Esc/M: Close"
+		map_help.text = "Click capital • T: Trade • A: Alliance • V: Realm view • Esc/M: Close"
 	else:
 		map_title.text = "THE YOUNG KINGDOM"
-		map_help.text = "Click regional center • O: Send order • V: World view • Esc/M: Close"
+		map_help.text = "Click region • O: Send order • V: World view • Esc/M: Close"
 
 func _cycle_selected_region() -> void:
 	var ids: Array[String] = kingdom_state.get_region_ids()
@@ -158,7 +179,12 @@ func _update_selected_kingdom_display() -> void:
 		map_status.text = "Click a capital to inspect a neighboring kingdom."
 		return
 	selected_region_label.text = "Selected: %s" % world_kingdom.get_summary()
-	map_status.text = world_kingdom.disposition
+	if diplomacy_system.active:
+		map_status.text = "An envoy is already abroad. Only one diplomatic mission is supported in this prototype."
+	elif world_kingdom.id == "player":
+		map_status.text = world_kingdom.disposition
+	else:
+		map_status.text = "%s  T: propose trade • A: propose alliance" % world_kingdom.disposition
 
 func _send_regional_order() -> void:
 	if messenger_system.active:
@@ -167,6 +193,23 @@ func _send_regional_order() -> void:
 	var region: RegionData = _get_selected_region()
 	if region != null:
 		messenger_system.start_journey(region)
+
+func _send_diplomatic_proposal(proposal: String) -> void:
+	if diplomacy_system.active:
+		map_status.text = "Your envoy is already abroad."
+		return
+	var target: WorldKingdomData = kingdom_state.get_world_kingdom(selected_kingdom_id)
+	var player_kingdom: WorldKingdomData = kingdom_state.get_world_kingdom("player")
+	if target == null or player_kingdom == null or target.id == "player":
+		map_status.text = "Select Edrath or Tirath before sending an envoy."
+		return
+	if proposal == "trade" and target.trade_agreement:
+		map_status.text = "A trade agreement with %s already exists." % target.display_name
+		return
+	if proposal == "alliance" and target.alliance:
+		map_status.text = "%s is already your ally." % target.display_name
+		return
+	diplomacy_system.start_mission(target, proposal, player_kingdom.world_position)
 
 func _set_dialogue_open(open: bool) -> void:
 	dialogue_open = open
@@ -181,13 +224,16 @@ func _on_speed_changed(speed_name: String) -> void:
 	speed_label.text = "Time: %s   [1 Pause • 2 1x • 3 10x • 4 100x]" % speed_name
 
 func _on_journey_started(target_id: String) -> void:
-	messenger_marker.visible = not world_view
-	messenger_marker.position = kingdom_state.capital_position
+	if not world_view:
+		messenger_marker.visible = true
+		messenger_marker.position = kingdom_state.capital_position
 	var region: RegionData = kingdom_state.get_region(target_id)
 	if region != null and not world_view:
 		selected_region_label.text = "Active route: %s" % region.get_summary()
 
 func _on_journey_progress(progress: float, returning: bool, target_id: String) -> void:
+	if world_view:
+		return
 	var route: PackedVector2Array = kingdom_state.get_route(target_id)
 	if route.size() < 2:
 		return
@@ -214,7 +260,67 @@ func _on_messenger_phase_changed(text: String) -> void:
 		map_status.text = text
 
 func _on_journey_completed(_target_id: String) -> void:
-	messenger_marker.position = kingdom_state.capital_position
-	messenger_marker.visible = false
 	if not world_view:
+		messenger_marker.position = kingdom_state.capital_position
+		messenger_marker.visible = false
 		_update_selected_region_display()
+
+func _on_diplomacy_started(target_id: String, proposal: String) -> void:
+	if not world_view:
+		return
+	var player_kingdom: WorldKingdomData = kingdom_state.get_world_kingdom("player")
+	if player_kingdom != null:
+		messenger_marker.position = player_kingdom.world_position
+	messenger_marker.visible = true
+	selected_kingdom_id = target_id
+	selected_region_label.text = "Envoy mission: %s" % proposal.capitalize()
+
+func _on_diplomacy_progress(progress: float, returning: bool, target_id: String) -> void:
+	if not world_view:
+		return
+	var player_kingdom: WorldKingdomData = kingdom_state.get_world_kingdom("player")
+	var target: WorldKingdomData = kingdom_state.get_world_kingdom(target_id)
+	if player_kingdom == null or target == null:
+		return
+	if returning:
+		messenger_marker.position = target.world_position.lerp(player_kingdom.world_position, progress)
+	else:
+		messenger_marker.position = player_kingdom.world_position.lerp(target.world_position, progress)
+
+func _on_diplomacy_phase_changed(text: String) -> void:
+	if world_view:
+		map_status.text = text
+
+func _on_diplomacy_completed(target_id: String, proposal: String, outcome: String) -> void:
+	var target: WorldKingdomData = kingdom_state.get_world_kingdom(target_id)
+	if target == null:
+		return
+	var result_text: String = ""
+	if proposal == "trade":
+		if outcome == "accepted":
+			target.trade_agreement = true
+			target.change_relation(8)
+			result_text = "%s accepted a trade agreement. Relations improved." % target.ruler_name
+		elif outcome == "countered":
+			target.change_relation(2)
+			result_text = "%s declined full trade, but offered a limited border market instead. Counteroffer received." % target.ruler_name
+		else:
+			target.change_relation(-3)
+			result_text = "%s refused the trade proposal." % target.ruler_name
+	elif proposal == "alliance":
+		if outcome == "accepted":
+			target.alliance = true
+			target.change_relation(12)
+			result_text = "%s accepted the alliance. Your kingdoms are now bound together." % target.ruler_name
+		elif outcome == "countered":
+			target.change_relation(4)
+			result_text = "%s would not accept an alliance, but proposed a non-aggression understanding." % target.ruler_name
+		else:
+			target.change_relation(-5)
+			result_text = "%s refused the alliance." % target.ruler_name
+	selected_kingdom_id = target_id
+	if world_view:
+		messenger_marker.visible = false
+		selected_region_label.text = "Reply: %s" % target.get_summary()
+		map_status.text = result_text
+	procedural_map.queue_redraw()
