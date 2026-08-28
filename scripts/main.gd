@@ -17,15 +17,20 @@ extends Node2D
 @onready var selected_region_label: Label = $UI/MapPanel/SelectedRegion
 @onready var procedural_map: ProceduralMap = $UI/MapPanel/ProceduralMap
 @onready var messenger_marker: Polygon2D = $UI/MapPanel/ProceduralMap/Messenger
+@onready var chronicle_panel: Panel = $UI/ChroniclePanel
+@onready var chronicle_text: RichTextLabel = $UI/ChroniclePanel/ChronicleText
 
 var diplomacy_system: DiplomacySystem = DiplomacySystem.new()
 var foreign_event_system: ForeignEventSystem = ForeignEventSystem.new()
 var regional_decision_system: RegionalDecisionSystem = RegionalDecisionSystem.new()
+var chronicle: Chronicle = Chronicle.new()
 var dialogue_open: bool = false
 var map_open: bool = false
 var world_view: bool = false
 var selected_region_index: int = 0
 var selected_kingdom_id: String = "player"
+var chronicle_open: bool = false
+var speed_before_chronicle: float = 1.0
 
 func _ready() -> void:
 	add_child(diplomacy_system)
@@ -34,6 +39,7 @@ func _ready() -> void:
 	dialogue_panel.visible = false
 	prompt.visible = false
 	map_panel.visible = false
+	chronicle_panel.visible = false
 	messenger_marker.visible = false
 	procedural_map.setup(kingdom_state)
 	procedural_map.region_clicked.connect(_select_region_by_id)
@@ -57,6 +63,7 @@ func _ready() -> void:
 	_on_speed_changed(game_time.get_speed_name())
 	_update_map_mode_text()
 	_update_selected_region_display()
+	_record_chronicle("Realm", "The First Year of King Aldren", "A young king took the throne of a realm still being forged.")
 
 func _process(delta: float) -> void:
 	messenger_system.advance(delta, game_time.speed_multiplier)
@@ -67,8 +74,8 @@ func _process(delta: float) -> void:
 		var diplomatic_ruler: CharacterData = kingdom_state.get_ruler_for_kingdom(diplomacy_system.target_id)
 		diplomacy_system.advance(delta, game_time.speed_multiplier, diplomatic_target, diplomatic_ruler)
 	var close_enough: bool = player.global_position.distance_to(advisor.global_position) < 90.0
-	prompt.visible = close_enough and not dialogue_open and not map_open
-	if close_enough and Input.is_action_just_pressed("interact") and not map_open:
+	prompt.visible = close_enough and not dialogue_open and not map_open and not chronicle_open
+	if close_enough and Input.is_action_just_pressed("interact") and not map_open and not chronicle_open:
 		_set_dialogue_open(not dialogue_open)
 		if dialogue_open:
 			var steward: CharacterData = kingdom_state.get_character("steward")
@@ -85,6 +92,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_3: game_time.set_speed(10.0)
 			KEY_4: game_time.set_speed(100.0)
 			KEY_M: _toggle_map()
+			KEY_K: _toggle_chronicle()
 			KEY_V:
 				if map_open: _toggle_world_view()
 			KEY_T:
@@ -107,9 +115,35 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_P:
 				if regional_decision_system.is_waiting_for_decision(): _choose_regional_response("pardon")
 			KEY_ESCAPE:
-				if map_open and not foreign_event_system.is_waiting_for_decision() and not regional_decision_system.is_waiting_for_decision(): _set_map_open(false)
+				if chronicle_open: _set_chronicle_open(false)
+				elif map_open and not foreign_event_system.is_waiting_for_decision() and not regional_decision_system.is_waiting_for_decision(): _set_map_open(false)
+
+func _toggle_chronicle() -> void:
+	if foreign_event_system.is_waiting_for_decision() or regional_decision_system.is_waiting_for_decision():
+		return
+	_set_chronicle_open(not chronicle_open)
+
+func _set_chronicle_open(open: bool) -> void:
+	chronicle_open = open
+	chronicle_panel.visible = open
+	if open:
+		if map_open: _set_map_open(false)
+		if dialogue_open: _set_dialogue_open(false)
+		speed_before_chronicle = game_time.speed_multiplier
+		game_time.set_speed(0.0)
+		chronicle_text.text = chronicle.get_display_text()
+	else:
+		game_time.set_speed(speed_before_chronicle)
+	player.set_movement_enabled(not open and not map_open and not dialogue_open)
+	prompt.visible = false
+
+func _record_chronicle(category: String, title: String, description: String) -> void:
+	chronicle.record(game_time.get_display_text(), category, title, description)
+	if chronicle_open:
+		chronicle_text.text = chronicle.get_display_text()
 
 func _toggle_map() -> void:
+	if chronicle_open: return
 	if (foreign_event_system.is_waiting_for_decision() or regional_decision_system.is_waiting_for_decision()) and map_open:
 		return
 	_set_map_open(not map_open)
@@ -240,6 +274,8 @@ func _send_diplomatic_proposal(proposal: String) -> void:
 
 func _choose_coup_response(choice: String) -> void:
 	if not foreign_event_system.choose_response(choice): return
+	var coup_choice: String = "Support King Malek" if choice == "support" else ("Recognize the rebels" if choice == "recognize" else "Remain neutral")
+	_record_chronicle("Foreign Affairs", "The Edrath Coup", "King Aldren chose to %s." % coup_choice.to_lower())
 	var edrath: WorldKingdomData = kingdom_state.get_world_kingdom("edrath")
 	if edrath == null: return
 	if choice == "support":
@@ -255,6 +291,8 @@ func _choose_regional_response(choice: String) -> void:
 		map_status.text = "Another royal messenger is still abroad. The March must wait for his return."
 		return
 	if not regional_decision_system.choose_response(choice): return
+	var choice_title: String = "Hunt the bandits" if choice == "hunt" else ("Guard the roads" if choice == "guard" else "Offer pardon for service")
+	_record_chronicle("Royal Decision", "The Bandits of Northern March", "King Aldren ordered: %s." % choice_title)
 	var northern_march: RegionData = kingdom_state.get_region("northern_march")
 	if northern_march == null: return
 	var order_text: String = ""
@@ -320,6 +358,7 @@ func _on_journey_completed(_target_id: String) -> void:
 			_update_map_mode_text()
 			selected_region_label.text = "REPORT FROM NORTHERN MARCH"
 			map_status.text = messenger_system.last_report
+			_record_chronicle("Regional Report", "The March Answered", messenger_system.last_report)
 		else:
 			_update_selected_region_display()
 
@@ -368,6 +407,7 @@ func _on_diplomacy_completed(target_id: String, proposal: String, outcome: Strin
 		else:
 			target.change_relation(-5)
 			result_text = "%s refused the alliance." % target.ruler_name
+	_record_chronicle("Diplomacy", "%s: %s" % [target.display_name, proposal.capitalize()], result_text)
 	var responding_ruler: CharacterData = kingdom_state.get_ruler_for_kingdom(target_id)
 	if responding_ruler != null:
 		var memory_weight: int = 4 if outcome == "accepted" else (1 if outcome == "countered" else -3)
@@ -380,6 +420,7 @@ func _on_diplomacy_completed(target_id: String, proposal: String, outcome: Strin
 	procedural_map.queue_redraw()
 
 func _on_foreign_news_arrived(text: String) -> void:
+	_record_chronicle("Foreign Crisis", "Coup in Edrath", text)
 	game_time.set_speed(0.0)
 	world_view = true
 	procedural_map.set_world_view(true)
@@ -418,9 +459,11 @@ func _on_foreign_event_resolved(text: String) -> void:
 	_update_map_mode_text()
 	selected_region_label.text = "AFTERMATH: %s" % edrath.get_summary()
 	map_status.text = text
+	_record_chronicle("Foreign Affairs", "The Fate of Edrath", text)
 	procedural_map.queue_redraw()
 
 func _on_regional_crisis_arrived(text: String) -> void:
+	_record_chronicle("Regional Crisis", "Bandits in Northern March", text)
 	game_time.set_speed(0.0)
 	world_view = false
 	procedural_map.set_world_view(false)

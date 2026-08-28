@@ -156,7 +156,7 @@ offset_left = 24.0
 offset_top = 54.0
 offset_right = 1000.0
 offset_bottom = 86.0
-text = "WASD: Move • E: Speak • M: Map • Click Region • O: Send Order • 1–4: Time"
+text = "WASD: Move • E: Speak • M: Map • K: Chronicle • O: Send Order • 1–4: Time"
 
 [node name="DateLabel" type="Label" parent="UI" unique_id=842674739]
 offset_left = 900.0
@@ -262,3 +262,39 @@ theme_override_colors/font_color = Color(0.95, 0.87, 0.68, 1)
 theme_override_font_sizes/font_size = 15
 text = "Choose a region and send an order."
 autowrap_mode = 2
+
+[node name="ChroniclePanel" type="Panel" parent="UI"]
+offset_left = 150.0
+offset_top = 90.0
+offset_right = 1130.0
+offset_bottom = 650.0
+theme_override_styles/panel = SubResource("MapStyle")
+
+[node name="ChronicleTitle" type="Label" parent="UI/ChroniclePanel"]
+offset_left = 34.0
+offset_top = 24.0
+offset_right = 600.0
+offset_bottom = 60.0
+theme_override_colors/font_color = Color(0.95, 0.87, 0.68, 1)
+theme_override_font_sizes/font_size = 26
+text = "THE ROYAL CHRONICLE"
+
+[node name="ChronicleHelp" type="Label" parent="UI/ChroniclePanel"]
+offset_left = 650.0
+offset_top = 30.0
+offset_right = 940.0
+offset_bottom = 58.0
+text = "K or Esc: Close"
+horizontal_alignment = 2
+
+[node name="ChronicleText" type="RichTextLabel" parent="UI/ChroniclePanel"]
+offset_left = 42.0
+offset_top = 78.0
+offset_right = 938.0
+offset_bottom = 522.0
+theme_override_colors/default_color = Color(0.94, 0.88, 0.73, 1)
+theme_override_font_sizes/normal_font_size = 17
+bbcode_enabled = false
+text = "No deeds have yet been recorded."
+fit_content = false
+scroll_active = true
