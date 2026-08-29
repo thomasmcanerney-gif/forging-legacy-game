@@ -37,6 +37,7 @@ var chronicle_open: bool = false
 var speed_before_chronicle: float = 1.0
 var dynasty_open: bool = false
 var speed_before_dynasty: float = 1.0
+var speed_before_decision: float = 1.0
 
 func _ready() -> void:
 	add_child(diplomacy_system)
@@ -178,8 +179,8 @@ func _choose_spouse(candidate_id: String) -> void:
 		queen_mother.remember("aldren_married", "The king secured the royal marriage", 8)
 	var match_description: String = "Lady Elara of Riverlands, a diplomatic and compassionate noblewoman." if candidate_id == "elara" else "Lady Sabine of the Western Hills, a bold and ambitious noblewoman."
 	_record_chronicle("Dynasty", "The Marriage of King Aldren", "King Aldren took as his queen %s" % match_description)
-	dynasty_help.text = "The royal marriage is concluded • J or Esc: Close"
 	_refresh_dynasty_text()
+	_set_dynasty_open(false)
 
 func _toggle_chronicle() -> void:
 	if dynasty_open: return
@@ -348,7 +349,8 @@ func _choose_coup_response(choice: String) -> void:
 		map_status.text = "You prepare to recognize the rebel regime if it secures Sarem. The decision has been made; now you wait for news."
 	else:
 		map_status.text = "You order the kingdom to remain neutral. Whatever happens in Sarem, your forces will stay home."
-	map_help.text = "Decision sent • Time must pass before the outcome is known"
+	map_help.text = "Decision sent • Time resumes while the outcome unfolds"
+	game_time.set_speed(speed_before_decision)
 
 func _choose_regional_response(choice: String) -> void:
 	if messenger_system.active:
@@ -368,6 +370,7 @@ func _choose_regional_response(choice: String) -> void:
 		order_text = "an offer of pardon in exchange for frontier service"
 	messenger_system.start_journey(northern_march, order_text, regional_decision_system.report_text)
 	map_help.text = "Decision sent • Watch the messenger carry your instructions"
+	game_time.set_speed(speed_before_decision)
 	map_status.text = "Your decision is made. Northern March will not act until the royal messenger arrives."
 
 func _set_dialogue_open(open: bool) -> void:
@@ -485,6 +488,7 @@ func _on_diplomacy_completed(target_id: String, proposal: String, outcome: Strin
 
 func _on_foreign_news_arrived(text: String) -> void:
 	_record_chronicle("Foreign Crisis", "Coup in Edrath", text)
+	speed_before_decision = game_time.speed_multiplier
 	game_time.set_speed(0.0)
 	world_view = true
 	procedural_map.set_world_view(true)
@@ -528,6 +532,7 @@ func _on_foreign_event_resolved(text: String) -> void:
 
 func _on_regional_crisis_arrived(text: String) -> void:
 	_record_chronicle("Regional Crisis", "Bandits in Northern March", text)
+	speed_before_decision = game_time.speed_multiplier
 	game_time.set_speed(0.0)
 	world_view = false
 	procedural_map.set_world_view(false)
