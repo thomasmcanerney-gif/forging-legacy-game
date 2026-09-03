@@ -69,20 +69,29 @@ func get_diplomatic_modifier(proposal: String) -> int:
 		if desires.has("Secure borders"): modifier += 8
 	return modifier
 
+func get_opinion_label() -> String:
+	if opinion_of_player >= 70: return "Deeply devoted"
+	if opinion_of_player >= 40: return "Supportive"
+	if opinion_of_player >= 15: return "Well disposed"
+	if opinion_of_player >= -15: return "Reserved"
+	if opinion_of_player >= -40: return "Distrustful"
+	return "Hostile"
+
 func get_summary() -> String:
 	var trait_text: String = ", ".join(traits)
 	var desire_text: String = ", ".join(desires)
-	return "%s %s • Age %d • Traits: %s • Wants: %s • Opinion: %d" % [title, display_name, age, trait_text, desire_text, opinion_of_player]
+	return "%s %s • Age %d • Traits: %s • Wants: %s • Attitude: %s" % [title, display_name, age, trait_text, desire_text, get_opinion_label()]
 
 func get_memory_summary() -> String:
 	if memories.is_empty():
 		return "Memories: none yet."
 	var descriptions: Array[String] = []
 	for memory in memories:
-		var weight: int = int(memory.get("weight", 0))
-		var sign_text: String = "+" if weight >= 0 else ""
-		descriptions.append("%s (%s%d)" % [String(memory.get("description", "")), sign_text, weight])
+		descriptions.append(String(memory.get("description", "")))
 	return "Memories: " + " • ".join(descriptions)
+
+func get_debug_summary() -> String:
+	return "%s • Opinion: %d • Memory influence: %d" % [get_summary(), opinion_of_player, get_memory_influence()]
 
 func _recalculate_opinion() -> void:
 	var memory_total: int = get_memory_influence()

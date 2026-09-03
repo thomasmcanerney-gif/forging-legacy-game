@@ -63,4 +63,4 @@ func get_summary() -> String:
 		agreements += " • Trade"
 	if alliance:
 		agreements += " • Alliance"
-	return "%s • %s %s • Capital: %s • Relations: %s (%d)%s" % [display_name, ruler_title, ruler_name, capital_name, relation_label, relation_to_player, agreements]
+	return "%s • %s %s • Capital: %s • Relations: %s%s" % [display_name, ruler_title, ruler_name, capital_name, relation_label, agreements]
